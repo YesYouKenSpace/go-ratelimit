@@ -48,6 +48,7 @@ func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *Redis
 		toSync:           sync.Map{},
 		lastSynced:       map[string]int64{},
 		syncErrorHandler: opt.SyncErrorHandler,
+		keyExpiry:        opt.KeyExpiry,
 	}
 	if rl.syncErrorHandler == nil {
 		rl.syncErrorHandler = func(err error) {
@@ -82,30 +83,23 @@ func (r *RedisDelayedSync) AllowN(key string, cost int) (bool, error) {
 	return r.inner.AllowN(key, cost)
 }
 
-// Scenario 1:
-//
 // Note: This function is not thread safe
 func (r *RedisDelayedSync) syncAll() error {
-	expiry := int64(0)
+	// -1 means no expiry
+	expiry := int64(-1)
+	// If the key expiry is set, use it to calculate the expiry time
 	if r.keyExpiry > 0 {
 		expiry = time.Now().Add(-r.keyExpiry).UnixNano()
 	}
-	keysToExpireRemotely := make([]string, 0)
 	// Consider using a different approach to prioritize syncing the keys that are used more frequently
 	r.toSync.Range(func(key, value any) bool {
-		err, toExpireRemote := r.sync(key.(string), expiry)
+		err := r.sync(key.(string), expiry)
 		if err != nil {
 			r.syncErrorHandler(err)
 			return false
 		}
-		if toExpireRemote {
-			keysToExpireRemotely = append(keysToExpireRemotely, key.(string))
-		}
 		return true
 	})
-	if len(keysToExpireRemotely) > 0 {
-		r.redisClient.Del(r.ctx, keysToExpireRemotely...)
-	}
 	// BUG: we used to clear the toSync[index] after syncing, but this will cause issues on keys that are used infrequently and the sync interval is large enough, the key could use up the burst limit before the key is synced, then skip a sync interval, and then use up the burst limit again on multiple instances
 	// Assumption: clear finishes before r.currentIndex rotates back to the index that is being cleared
 	// If the assumption is not true, the key will be synced again in the next sync interval if the key is used again
@@ -117,7 +111,7 @@ func (r *RedisDelayedSync) syncAll() error {
 }
 
 // Note: This function is not thread safe
-func (r *RedisDelayedSync) sync(key string, expiry int64) (err error, toExpireRemote bool) {
+func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 	limiter := r.inner.GetLimiter(key)
 	resetAt := limiter.GetResetAt()
 
@@ -125,10 +119,9 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) (err error, toExpireRe
 	// If the key is not synced yet, this could be the first time the key is used across the entire distributed environment
 	// We need to set the key in the redis
 	if r.lastSynced[key] == 0 {
-		// TODO: fix arbitrary 48 hours expiry
-		cmd := r.redisClient.SetNX(r.ctx, key, resetAt, time.Hour*48)
+		cmd := r.redisClient.SetNX(r.ctx, key, resetAt, 0)
 		if cmd.Err() != nil {
-			return cmd.Err(), false
+			return cmd.Err()
 		}
 		// We assume that this server is the first server to set the key in the redis
 		// There is no need to check the result of the SetNX command, as it does not matter if the key is set by another server or not,
@@ -139,7 +132,7 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) (err error, toExpireRe
 	}
 	cmd := r.redisClient.IncrBy(r.ctx, key, int64(delta))
 	if cmd.Err() != nil {
-		return cmd.Err(), false
+		return cmd.Err()
 	}
 	// if lastSynced value was previously set to the local resetAt value
 	// diff==0: if the key is not set by another server
@@ -150,13 +143,13 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) (err error, toExpireRe
 		r.toSync.Delete(key)
 		r.lastSynced[key] = 0
 		if diff == 0 {
-			return nil, true
+			r.redisClient.Expire(r.ctx, key, r.keyExpiry)
 		}
-		return nil, false
+		return nil
 	}
 	if diff > 0 {
 		limiter.IncrementResetAtBy(diff)
 	}
 	r.lastSynced[key] = cmd.Val()
-	return nil, false
+	return nil
 }
