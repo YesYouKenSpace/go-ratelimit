@@ -21,7 +21,6 @@ type RedisDelayedSync struct {
 	toSync           []sync.Map
 	lastSynced       map[string]int64
 	syncErrorHandler func(error)
-	keyExpiry        time.Duration
 }
 
 type RedisDelayedSyncOption struct {
@@ -32,7 +31,6 @@ type RedisDelayedSyncOption struct {
 	Burst                int
 	RedisClient          *redis.Client
 	SyncErrorHandler     func(error)
-	KeyExpiry            time.Duration
 }
 
 func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *RedisDelayedSync {
@@ -92,6 +90,7 @@ func (r *RedisDelayedSync) syncAll(index int32) error {
 	// Consider using a different approach to prioritize syncing the keys that are used more frequently
 	r.toSync[index].Range(func(key, value any) bool {
 		if err := r.sync(key.(string), expiry); err != nil {
+			r.syncErrorHandler(err)
 			return false
 		}
 		return true
@@ -136,9 +135,6 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 	// diff>0: if the key is set by another server and the current server joined the cluster later -
 	// this is the case where the clock drift could be an issue if the key is set by another server, the clock drift will affect calculation of the diff
 	diff := cmd.Val() - r.lastSynced[key] - delta
-	if resetAt < expiry {
-		return nil
-	}
 	if diff > 0 {
 		limiter.IncrementResetAtBy(diff)
 	}
