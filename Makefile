@@ -5,7 +5,7 @@ TEST_BENCHTIME?=10s
 CONCURRENT_USERS?=32768
 
 test:
-	go test -test.count=$(TEST_COUNT) ./... -v -parallel=8
+	go test -race -test.count=$(TEST_COUNT) ./... -v -parallel=8
 
 lint:
 	golangci-lint run
