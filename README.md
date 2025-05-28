@@ -47,6 +47,67 @@ A high-performance distributed rate limiter designed for systems that prioritize
 - **Penalty Spillover**: If users exceed designated rate-limit globally, upon the next synchronization the user would still throttled accordingly
 - **Use Cases**: High-throughput distributed systems where occasional rate limit inaccuracies are acceptable
 
+```mermaid
+sequenceDiagram
+    participant Client
+    Box Server 1
+      participant RDS1 as RedisDelayedSync1
+    end
+    Box Server 2
+      participant RDS2 as RedisDelayedSync2
+    end
+    participant Redis
+
+
+
+    Note over RDS1: Initial State: 5 tokens available
+    Note over RDS2: Initial State: 5 tokens available
+    Note over Redis: Initial State: 5 tokens available
+
+    par
+      Client->>RDS1: Request 3 tokens
+      RDS1->>RDS1: Check and modify local state (2 tokens remaining)
+      Note over RDS1: Local State: 2 tokens available
+      RDS1->>Client: Allow
+    and
+      Client->>RDS2: Request 2 tokens
+      RDS2->>RDS2: Check and modify local state (3 tokens remaining)
+      RDS2->>Client: Allow
+      Note over RDS2: Local State: 3 tokens available
+
+    end
+
+    alt happy path
+      RDS1->>Redis: Async sync (-3 tokens)
+      Redis->>RDS1: 2 tokens available
+      Note over Redis: 2 tokens available
+      RDS2->>Redis: Async sync (-2 tokens, local state: 0 tokens available)
+      Redis->>RDS2: 0 tokens available
+      Note over Redis: 0 tokens available
+      Note over RDS2: Local State: 0 tokens available
+      RDS1->>Redis: Async sync 
+      Redis->>RDS1: 0 tokens available
+      Note over RDS1: 0 tokens available
+    else not so happy path
+      RDS1->>Redis: Async sync (-3 tokens)
+      Redis->>RDS1: 2 tokens available
+      Note over Redis: 2 tokens available
+      RDS2->>Redis: Async sync (-2 tokens, local state: 0 tokens available)
+      Redis->>RDS2: 0 tokens available
+      Note over Redis: 0 tokens available
+      Note over RDS2: Local State: 0 tokens available
+      Client->>RDS1: Request 2 tokens
+      RDS1->>RDS1: Check and modify local state (0 tokens remaining)
+      Note over RDS1: Local State: 0 tokens available
+      RDS1->>Client: Allow
+      RDS1->>Redis: Async sync (-2 tokens)
+      Redis->>RDS1: -2 tokens available
+      Note over RDS1: -2 tokens available, RDS1 will be in deficit and wait for tokens to be replenished
+    end 
+
+    Note over RateLimiter,Redis: After sync: Global state updated
+```
+
 #### **GoRedisRate**
 A wrapper around `github.com/go-redis/redis_rate` for testing and benchmarking purposes.
 
