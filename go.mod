@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/go-redis/redis_rate/v10 v10.0.1
-	github.com/redis/go-redis/v9 v9.6.3
+	github.com/redis/go-redis/v9 v9.9.0
 	golang.org/x/time v0.11.0
 )
 
