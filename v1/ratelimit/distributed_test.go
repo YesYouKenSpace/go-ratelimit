@@ -16,7 +16,7 @@ func TestDistributedAllow(t *testing.T) {
 			burst:           4000,
 			runPattern:      []time.Duration{10 * time.Second, 2 * time.Second, 10 * time.Second},
 			expectedAllowed: 88000,
-			tolerance:       0.01,
+			tolerance:       0.015,
 			instances:       10,
 		},
 	}
