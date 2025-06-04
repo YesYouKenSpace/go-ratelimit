@@ -1,6 +1,7 @@
 package limiter
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -13,32 +14,30 @@ type Bucket struct {
 	mu        sync.Mutex
 }
 
-func NewBucket(rate float64, burst int) *Bucket {
+func NewBucket() *Bucket {
 	return &Bucket{
-		B:         float64(burst),
-		remaining: float64(burst),
-		R:         rate,
+		remaining: math.MaxFloat64,
 		lastCheck: time.Now(),
 	}
 }
 
-func (b *Bucket) ForceN(n int) bool {
-	return b.allowN(n, false)
+func (b *Bucket) ForceN(n int, replenishPerSecond float64, burst int) bool {
+	return b.allowN(n, replenishPerSecond, burst, false)
 }
 
-func (b *Bucket) AllowN(n int) bool {
-	return b.allowN(n, true)
+func (b *Bucket) AllowN(n int, replenishPerSecond float64, burst int) bool {
+	return b.allowN(n, replenishPerSecond, burst, true)
 }
 
-func (b *Bucket) allowN(n int, shouldCheck bool) bool {
+func (b *Bucket) allowN(n int, replenishPerSecond float64, burst int, shouldCheck bool) bool {
 	now := time.Now()
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	leak := now.Sub(b.lastCheck).Seconds() * b.R
+	leak := now.Sub(b.lastCheck).Seconds() * replenishPerSecond
 
 	if leak > 0 {
-		if b.remaining+leak > b.B {
-			b.remaining = b.B
+		if b.remaining+leak > float64(burst) {
+			b.remaining = float64(burst)
 		} else {
 			b.remaining += leak
 		}
@@ -51,8 +50,4 @@ func (b *Bucket) allowN(n int, shouldCheck bool) bool {
 	} else {
 		return false
 	}
-}
-
-func (b *Bucket) Allow() bool {
-	return b.AllowN(1)
 }

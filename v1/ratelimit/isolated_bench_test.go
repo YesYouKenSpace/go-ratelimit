@@ -37,17 +37,15 @@ func BenchmarkIsolated(b *testing.B) {
 		name    string
 		limiter Ratelimiter
 	}{
-		{name: "SyncMap + LoadOrStore", limiter: NewSyncMapLoadOrStore(NewDefaultLimiter, rate, burst)},
-		{name: "SyncMap + Load > LoadOrStore", limiter: NewSyncMapLoadThenLoadOrStore(NewDefaultLimiter, rate, burst)},
-		{name: "SyncMap + Load > Store", limiter: NewSyncMapLoadThenStore(NewDefaultLimiter, rate, burst)},
-		{name: "Map + Mutex", limiter: NewMutex(NewDefaultLimiter, rate, burst)},
-		{name: "Map + RWMutex", limiter: NewRWMutex(NewDefaultLimiter, rate, burst)},
-		{name: "Redis", limiter: NewGoRedis(newRDB(), rate, burst)},
+		{name: "SyncMap + LoadOrStore", limiter: NewSyncMapLoadOrStore(NewDefaultLimiter)},
+		{name: "SyncMap + Load > LoadOrStore", limiter: NewSyncMapLoadThenLoadOrStore(NewDefaultLimiter)},
+		{name: "SyncMap + Load > Store", limiter: NewSyncMapLoadThenStore(NewDefaultLimiter)},
+		{name: "Map + Mutex", limiter: NewMutex(NewDefaultLimiter)},
+		{name: "Map + RWMutex", limiter: NewRWMutex(NewDefaultLimiter)},
+		{name: "Redis", limiter: NewGoRedis(newRDB())},
 		{name: "Redis With Delay", limiter: NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-			RedisClient:          newRDB(),
-			ReplenishedPerSecond: rate,
-			Burst:                burst,
-			SyncInterval:         time.Second / 2,
+			RedisClient:  newRDB(),
+			SyncInterval: time.Second / 2,
 		})},
 	}
 	concurrentUsers := 32768
@@ -86,7 +84,7 @@ func benchmarkIsolated(b *testing.B, c benchmarkIsolatedConfig) bool {
 			a := int64(0)
 			d := int64(0)
 			for pb.Next() {
-				if ok, _ := c.limiter.Allow(rStr); ok {
+				if ok, _ := c.limiter.AllowN(rStr, 1, c.rate, c.burst); ok {
 					a++
 				} else {
 					d++

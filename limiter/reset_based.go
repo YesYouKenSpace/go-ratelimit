@@ -8,42 +8,32 @@ import (
 )
 
 type ResetBasedLimiter struct {
-	resetAt            atomic.Int64
-	burst              int
-	nanosecondPerToken int64
-	mu                 sync.RWMutex
-	burstInNano        int64
-	deltaSince         atomic.Int64
+	resetAt    atomic.Int64
+	mu         sync.RWMutex
+	deltaSince atomic.Int64
 }
 
 var _ Limiter = &ResetBasedLimiter{}
 
-func NewResetbasedLimiter(tps float64, burst int) *ResetBasedLimiter {
-	nspt := int64(float64(time.Second) / tps)
-	burstInNano := int64(burst) * nspt
-	l := &ResetBasedLimiter{
-		nanosecondPerToken: nspt,
-		burst:              burst,
-		burstInNano:        burstInNano,
-	}
-	l.resetAt.Store(time.Now().UnixNano() - burstInNano)
+func NewResetbasedLimiter() *ResetBasedLimiter {
+	l := &ResetBasedLimiter{}
+	l.resetAt.Store(0)
 	return l
 }
 
-func (l *ResetBasedLimiter) Allow() bool {
-	return l.AllowN(1)
-}
-
-func (l *ResetBasedLimiter) allowN(n int, shouldCheck bool) bool {
+func (l *ResetBasedLimiter) allowN(n int, replenishPerSecond float64, burst int, shouldCheck bool) bool {
 	now := time.Now().UnixNano()
-	if (shouldCheck && l.resetAt.Load() > now) || n > l.burst {
+	if (shouldCheck && l.resetAt.Load() > now) || n > burst {
 		return false
 	}
 
-	incrementInNano := int64(n) * l.nanosecondPerToken
+	nanosecondsPerToken := int64(float64(time.Second) / replenishPerSecond)
+	burstInNano := int64(burst) * nanosecondsPerToken
+
+	incrementInNano := int64(n) * nanosecondsPerToken
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	newResetAt := math.Max(float64(l.resetAt.Load()), float64(now-l.burstInNano)) + float64(incrementInNano)
+	newResetAt := math.Max(float64(l.resetAt.Load()), float64(now-burstInNano)) + float64(incrementInNano)
 	if shouldCheck && newResetAt > float64(now) {
 		return false
 	}
@@ -52,12 +42,12 @@ func (l *ResetBasedLimiter) allowN(n int, shouldCheck bool) bool {
 	return true
 }
 
-func (l *ResetBasedLimiter) AllowN(n int) bool {
-	return l.allowN(n, true)
+func (l *ResetBasedLimiter) AllowN(n int, replenishPerSecond float64, burst int) bool {
+	return l.allowN(n, replenishPerSecond, burst, true)
 }
 
-func (l *ResetBasedLimiter) ForceN(n int) bool {
-	return l.allowN(n, false)
+func (l *ResetBasedLimiter) ForceN(n int, replenishPerSecond float64, burst int) bool {
+	return l.allowN(n, replenishPerSecond, burst, false)
 }
 
 func (l *ResetBasedLimiter) IncrementResetAtBy(inc int64) {

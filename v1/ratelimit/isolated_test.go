@@ -14,124 +14,127 @@ func TestIsolatedAllow(t *testing.T) {
 		{
 			reqPerSec:       100,
 			burst:           10,
-			runFor:          3 * time.Second,
-			expectedAllowed: 310,
+			runPattern:      []time.Duration{1 * time.Second, 1 * time.Second, 2 * time.Second},
+			expectedAllowed: 320,
 			tolerance:       0.01,
 		},
 		{
 			reqPerSec:       10,
 			burst:           100,
-			runFor:          3 * time.Second,
-			expectedAllowed: 130,
+			runPattern:      []time.Duration{1500 * time.Millisecond, 11 * time.Second, 1500 * time.Millisecond},
+			expectedAllowed: 230,
+			tolerance:       0.01,
+		},
+		{
+			reqPerSec:       100,
+			burst:           100,
+			runPattern:      []time.Duration{5 * time.Second, 2 * time.Second, 5 * time.Second},
+			expectedAllowed: 1200,
 			tolerance:       0.01,
 		},
 	}
 
 	ratelimiters := []struct {
 		name        string
-		constructor func(float64, int) Ratelimiter
+		constructor func() Ratelimiter
 	}{
 		{
 			name: "SyncMap + Load > LoadOrStore",
-			constructor: func(l float64, i int) Ratelimiter {
-				return NewSyncMapLoadThenLoadOrStore(NewDefaultLimiter, l, i)
+			constructor: func() Ratelimiter {
+				return NewSyncMapLoadThenLoadOrStore(NewDefaultLimiter)
 			},
 		},
 		{
 			name: "SyncMap + Load > Store",
-			constructor: func(l float64, i int) Ratelimiter {
-				return NewSyncMapLoadThenStore(NewDefaultLimiter, l, i)
+			constructor: func() Ratelimiter {
+				return NewSyncMapLoadThenStore(NewDefaultLimiter)
 			},
 		},
 		{
 			name: "SyncMap + LoadOrStore",
-			constructor: func(l float64, i int) Ratelimiter {
-				return NewSyncMapLoadOrStore(NewDefaultLimiter, l, i)
+			constructor: func() Ratelimiter {
+				return NewSyncMapLoadOrStore(NewDefaultLimiter)
 			},
 		},
 		{
 			name: "Map + Mutex",
-			constructor: func(l float64, i int) Ratelimiter {
-				return NewMutex(NewDefaultLimiter, l, i)
+			constructor: func() Ratelimiter {
+				return NewMutex(NewDefaultLimiter)
 			},
 		},
 		{
 			name: "Map + RWMutex",
-			constructor: func(l float64, i int) Ratelimiter {
-				return NewRWMutex(NewDefaultLimiter, l, i)
+			constructor: func() Ratelimiter {
+				return NewRWMutex(NewDefaultLimiter)
 			},
 		},
 		{
 			name: "Redis",
-			constructor: func(l float64, i int) Ratelimiter {
-				return NewGoRedis(newRDB(), l, i)
+			constructor: func() Ratelimiter {
+				return NewGoRedis(newRDB())
 			},
 		},
 		{
 			name: "Redis with delay in sync",
-			constructor: func(l float64, i int) Ratelimiter {
+			constructor: func() Ratelimiter {
 				return NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-					RedisClient:          newRDB(),
-					ReplenishedPerSecond: l,
-					Burst:                i,
-					SyncInterval:         time.Second / 2,
+					RedisClient:  newRDB(),
+					SyncInterval: time.Second / 2,
 				})
 			},
 		},
 	}
 	for _, ratelimiter := range ratelimiters {
 		for _, tt := range tests {
-			testRatelimiter(t, testRatelimiterConfig{
-				name:            ratelimiter.name,
-				reqPerSec:       tt.reqPerSec,
-				burst:           tt.burst,
-				runFor:          tt.runFor,
-				constructor:     ratelimiter.constructor,
-				expectedAllowed: tt.expectedAllowed,
-				tolerance:       tt.tolerance,
-			})
+			testRatelimiter(t, ratelimiter.name, ratelimiter.constructor, tt)
 		}
 	}
 }
 
 type testRatelimiterConfig struct {
-	name            string
-	reqPerSec       float64
-	burst           int
-	runFor          time.Duration
-	constructor     func(float64, int) Ratelimiter
+	reqPerSec float64
+	burst     int
+	// runPattern is a list of durations to run the test for. Every odd index is a rest where no attempts on allow are made, every even/zero index is a run duration where attempts on allow are made.
+	runPattern      []time.Duration
+	constructor     func() Ratelimiter
 	expectedAllowed int
 	tolerance       float64
 }
 
-func testRatelimiter(t *testing.T, tt testRatelimiterConfig) {
-	t.Run(fmt.Sprintf("ratelimiter=%s;rps=%2f;burst=%d", tt.name, tt.reqPerSec, tt.burst), func(t *testing.T) {
+func testRatelimiter(t *testing.T, name string, constructor func() Ratelimiter, tt testRatelimiterConfig) {
+	t.Run(fmt.Sprintf("ratelimiter=%s;rps=%2f;burst=%d", name, tt.reqPerSec, tt.burst), func(t *testing.T) {
 		rStr := utils.RandString(4)
 		t.Parallel()
 		allowed := 0
 		denied := 0
-		ticker := time.NewTicker(time.Millisecond)
-		timer := time.NewTimer(tt.runFor)
-		limiterGroup := tt.constructor(tt.reqPerSec, tt.burst)
-	L:
-		for {
-			select {
-			case <-ticker.C:
-				if ok, _ := limiterGroup.Allow(rStr); ok {
-					allowed++
-				} else {
-					denied++
+		limiterGroup := constructor()
+		for i, runFor := range tt.runPattern {
+			if i%2 == 1 {
+				time.Sleep(runFor)
+				continue
+			}
+			ticker := time.NewTicker(time.Millisecond)
+			timer := time.NewTimer(runFor)
+		L:
+			for {
+				select {
+				case <-ticker.C:
+					if ok, _ := limiterGroup.AllowN(rStr, 1, tt.reqPerSec, tt.burst); ok {
+						allowed++
+					} else {
+						denied++
+					}
+				case <-timer.C:
+					ticker.Stop()
+					break L
 				}
-			case <-timer.C:
-				ticker.Stop()
-				break L
 			}
 		}
 		if !utils.IsCloseEnough(float64(tt.expectedAllowed), float64(allowed), tt.tolerance) {
 			t.Errorf("expected %d, got %d", tt.expectedAllowed, allowed)
 		}
-		if allowed+denied < int(tt.reqPerSec)*int(tt.runFor.Seconds()) {
-			t.Errorf("expected >%d total requests, got %d", int(tt.reqPerSec)*int(tt.runFor.Seconds()), allowed+denied)
+		if denied < 1 {
+			t.Errorf("expected >0 denied requests, got %d", denied)
 		}
 	})
 }

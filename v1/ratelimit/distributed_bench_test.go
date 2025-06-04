@@ -21,13 +21,11 @@ func BenchmarkDistributed(b *testing.B) {
 		name string
 		c    func() Ratelimiter
 	}{
-		{name: "Redis", c: func() Ratelimiter { return NewGoRedis(newRDB(2), rate, burst) }},
+		{name: "Redis", c: func() Ratelimiter { return NewGoRedis(newRDB(2)) }},
 		{name: "Redis with delay in sync", c: func() Ratelimiter {
 			return NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-				RedisClient:          newRDB(3),
-				ReplenishedPerSecond: rate,
-				Burst:                burst,
-				SyncInterval:         time.Second / 2,
+				RedisClient:  newRDB(3),
+				SyncInterval: time.Second / 2,
 			})
 		},
 		},
@@ -77,7 +75,7 @@ func benchmarkDistributed(b *testing.B, c benchmarkDistributedConfig) bool {
 			a := int64(0)
 			d := int64(0)
 			for pb.Next() {
-				if ok, _ := rl.Allow(rStr); ok {
+				if ok, _ := rl.AllowN(rStr, 1, c.rate, c.burst); ok {
 					a++
 				} else {
 					d++

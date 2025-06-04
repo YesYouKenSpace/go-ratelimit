@@ -1,7 +1,6 @@
 package limiter
 
 type Limiter interface {
-	Allow() bool
-	AllowN(int) bool
-	ForceN(int) bool
+	AllowN(int, float64, int) bool
+	ForceN(int, float64, int) bool
 }

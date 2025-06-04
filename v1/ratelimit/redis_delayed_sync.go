@@ -25,12 +25,10 @@ type RedisDelayedSync struct {
 type RedisDelayedSyncOption struct {
 	// SyncInterval is the interval to sync the rate limit to the redis
 	// Adjust this value to trade off between the performance and the accuracy of the rate limit
-	SyncInterval         time.Duration
-	ReplenishedPerSecond float64
-	Burst                int
-	RedisClient          *redis.Client
-	SyncErrorHandler     func(error)
-	KeyExpiry            time.Duration
+	SyncInterval     time.Duration
+	RedisClient      *redis.Client
+	SyncErrorHandler func(error)
+	KeyExpiry        time.Duration
 }
 
 func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *RedisDelayedSync {
@@ -44,7 +42,7 @@ func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *Redis
 		cancel:           cancel,
 		redisClient:      opt.RedisClient,
 		syncInterval:     opt.SyncInterval,
-		inner:            NewSyncMapLoadThenStore(limiter.NewResetbasedLimiter, opt.ReplenishedPerSecond, opt.Burst),
+		inner:            NewSyncMapLoadThenStore(limiter.NewResetbasedLimiter),
 		toSync:           sync.Map{},
 		lastSynced:       map[string]int64{},
 		syncErrorHandler: opt.SyncErrorHandler,
@@ -74,13 +72,12 @@ func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *Redis
 	return rl
 }
 
-func (r *RedisDelayedSync) Allow(key string) (bool, error) {
-	return r.AllowN(key, 1)
-}
-
-func (r *RedisDelayedSync) AllowN(key string, cost int) (bool, error) {
-	r.toSync.LoadOrStore(key, struct{}{})
-	return r.inner.AllowN(key, cost)
+func (r *RedisDelayedSync) AllowN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
+	_, loaded := r.toSync.LoadOrStore(key, struct{}{})
+	if !loaded {
+		r.sync(key, int64(-1))
+	}
+	return r.inner.AllowN(key, cost, replenishPerSecond, burst)
 }
 
 // Note: This function is not thread safe
