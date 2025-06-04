@@ -11,7 +11,6 @@ import (
 type GoRedisRate struct {
 	ctx     context.Context
 	limiter *redis_rate.Limiter
-	limit   redis_rate.Limit
 }
 
 var _ Ratelimiter = &GoRedisRate{}

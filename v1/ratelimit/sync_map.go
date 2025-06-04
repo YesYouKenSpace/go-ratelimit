@@ -7,10 +7,8 @@ import (
 )
 
 type SyncMapLoadThenLoadOrStore[Limiter limiter.Limiter] struct {
-	limiters             sync.Map
-	replenishedPerSecond float64
-	burst                int
-	newLimiterFn         func() Limiter
+	limiters     sync.Map
+	newLimiterFn func() Limiter
 }
 
 var _ Ratelimiter = &SyncMapLoadThenLoadOrStore[limiter.Limiter]{}
@@ -42,10 +40,8 @@ func (d *SyncMapLoadThenLoadOrStore[Limiter]) ForceN(key string, cost int, reple
 }
 
 type SyncMapLoadOrStore[Limiter limiter.Limiter] struct {
-	limiters             sync.Map
-	replenishedPerSecond float64
-	burst                int
-	newLimiterFn         func() Limiter
+	limiters     sync.Map
+	newLimiterFn func() Limiter
 }
 
 func NewSyncMapLoadOrStore[Limiter limiter.Limiter](newLimiterFn func() Limiter) *SyncMapLoadOrStore[Limiter] {
@@ -62,10 +58,8 @@ func (d *SyncMapLoadOrStore[Limiter]) AllowN(key string, cost int, replenishPerS
 var _ Ratelimiter = &SyncMapLoadOrStore[limiter.Limiter]{}
 
 type SyncMapLoadThenStore[Limiter limiter.Limiter] struct {
-	limiters             sync.Map
-	replenishedPerSecond float64
-	burst                int
-	newLimiterFn         func() Limiter
+	limiters     sync.Map
+	newLimiterFn func() Limiter
 }
 
 var _ Ratelimiter = &SyncMapLoadThenStore[limiter.Limiter]{}

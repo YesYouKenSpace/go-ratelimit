@@ -96,7 +96,6 @@ type testRatelimiterConfig struct {
 	burst     int
 	// runPattern is a list of durations to run the test for. Every odd index is a rest where no attempts on allow are made, every even/zero index is a run duration where attempts on allow are made.
 	runPattern      []time.Duration
-	constructor     func() Ratelimiter
 	expectedAllowed int
 	tolerance       float64
 }
