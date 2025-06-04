@@ -21,7 +21,7 @@ func NewMutex[Limiter limiter.Limiter](newLimiterFn func() Limiter) *Mutex[Limit
 	}
 }
 
-func (d *Mutex[Limiter]) getLimiter(key string, replenishPerSecond float64, burst int) Limiter {
+func (d *Mutex[Limiter]) getLimiter(key string) Limiter {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	l, ok := d.limiters[key]
@@ -33,7 +33,7 @@ func (d *Mutex[Limiter]) getLimiter(key string, replenishPerSecond float64, burs
 }
 
 func (d *Mutex[Limiter]) AllowN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
-	l := d.getLimiter(key, replenishPerSecond, burst)
+	l := d.getLimiter(key)
 	return l.AllowN(cost, replenishPerSecond, burst), nil
 }
 
@@ -50,7 +50,7 @@ func NewRWMutex[Limiter limiter.Limiter](newLimiterFn func() Limiter) *RWMutex[L
 	}
 }
 
-func (d *RWMutex[Limiter]) getLimiter(key string, replenishPerSecond float64, burst int) limiter.Limiter {
+func (d *RWMutex[Limiter]) getLimiter(key string) limiter.Limiter {
 	d.mu.RLock()
 	l, ok := d.limiters[key]
 	d.mu.RUnlock()
@@ -64,6 +64,6 @@ func (d *RWMutex[Limiter]) getLimiter(key string, replenishPerSecond float64, bu
 }
 
 func (d *RWMutex[Limiter]) AllowN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
-	l := d.getLimiter(key, replenishPerSecond, burst)
+	l := d.getLimiter(key)
 	return l.AllowN(cost, replenishPerSecond, burst), nil
 }

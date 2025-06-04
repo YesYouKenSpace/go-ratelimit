@@ -38,7 +38,7 @@ func (d *SyncMapLoadThenLoadOrStore[Limiter]) ForceN(key string, cost int, reple
 	if !ok {
 		l, _ = d.limiters.LoadOrStore(key, d.newLimiterFn())
 	}
-	return l.(limiter.Limiter).AllowN(cost, replenishPerSecond, burst), nil
+	return l.(limiter.Limiter).ForceN(cost, replenishPerSecond, burst), nil
 }
 
 type SyncMapLoadOrStore[Limiter limiter.Limiter] struct {
