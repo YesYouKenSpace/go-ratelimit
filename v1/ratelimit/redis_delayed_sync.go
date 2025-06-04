@@ -75,7 +75,9 @@ func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *Redis
 func (r *RedisDelayedSync) AllowN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
 	_, loaded := r.toSync.LoadOrStore(key, struct{}{})
 	if !loaded {
-		r.sync(key, int64(-1))
+		if err := r.sync(key, int64(-1)); err != nil {
+			r.syncErrorHandler(err)
+		}
 	}
 	return r.inner.AllowN(key, cost, replenishPerSecond, burst)
 }
