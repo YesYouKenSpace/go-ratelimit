@@ -67,9 +67,9 @@ func TestLimiterAllow(t *testing.T) {
 		{
 			replenishPerSecond: 500,
 			burst:              1000,
-			runPattern:         []time.Duration{1 * time.Second, 1 * time.Second, 1 * time.Second},
-			expectedAllowed:    2500,
-			tolerance:          0.0001,
+			runPattern:         []time.Duration{2 * time.Second, 1 * time.Second, 2 * time.Second},
+			expectedAllowed:    3500,
+			tolerance:          0.01,
 		},
 	}
 

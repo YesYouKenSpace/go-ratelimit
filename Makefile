@@ -5,7 +5,10 @@ TEST_BENCHTIME?=10s
 CONCURRENT_USERS?=32768
 
 test:
-	go test -race -test.count=$(TEST_COUNT) ./... -v -parallel=8
+	go test -race -covermode=atomic -coverprofile=coverage.out -test.count=$(TEST_COUNT) ./... -v -parallel=8
+
+coverage:
+	go tool cover -html=coverage.out
 
 lint:
 	golangci-lint run
