@@ -1,0 +1,48 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/yesyoukenspace/go-ratelimit/v1/ratelimit
+cpu: Apple M1 Pro
+BenchmarkIsolated
+BenchmarkIsolated/parameters	totalConcurrency: 2048, concurrencyPerUser: 8, users: 256, rate: 3000.000000, burst: 3000
+BenchmarkIsolated/Map_+_Mutex
+BenchmarkIsolated/Map_+_Mutex-10         	75013634	       141.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIsolated/Map_+_Mutex/custom_metrics	allowed=8208054.000000	disallowed=66805580.000000	lapsed=10.635159
+BenchmarkIsolated/Map_+_Mutex/custom_metrics	allowed(rps)=771784.815381	total(rps)=7053362.912542
+BenchmarkIsolated/Map_+_Mutex/custom_metrics	allowed(rps/user)=3014.784435	total(rps/user)=27552.198877
+BenchmarkIsolated/Map_+_RWMutex
+BenchmarkIsolated/Map_+_RWMutex-10       	90701641	       135.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIsolated/Map_+_RWMutex/custom_metrics	allowed=6146319.000000	disallowed=84555322.000000	lapsed=12.306099
+BenchmarkIsolated/Map_+_RWMutex/custom_metrics	allowed(rps)=499453.087883	total(rps)=7370462.657972
+BenchmarkIsolated/Map_+_RWMutex/custom_metrics	allowed(rps/user)=1950.988625	total(rps/user)=28790.869758
+BenchmarkIsolated/SyncMap_+_LoadOrStore
+BenchmarkIsolated/SyncMap_+_LoadOrStore-10         	343723231	        35.48 ns/op	      64 B/op	       2 allocs/op
+BenchmarkIsolated/SyncMap_+_LoadOrStore/custom_metrics	allowed=9256327.000000	disallowed=334466904.000000	lapsed=12.196488
+BenchmarkIsolated/SyncMap_+_LoadOrStore/custom_metrics	allowed(rps)=758933.821992	total(rps)=28182148.859955
+BenchmarkIsolated/SyncMap_+_LoadOrStore/custom_metrics	allowed(rps/user)=2964.585242	total(rps/user)=110086.518984
+BenchmarkIsolated/SyncMap_+_Load_>_LoadOrStore
+BenchmarkIsolated/SyncMap_+_Load_>_LoadOrStore-10  	334049823	        34.34 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIsolated/SyncMap_+_Load_>_LoadOrStore/custom_metrics	allowed=4699883.000000	disallowed=329349940.000000	lapsed=11.471281
+BenchmarkIsolated/SyncMap_+_Load_>_LoadOrStore/custom_metrics	allowed(rps)=409708.661800	total(rps)=29120534.693310
+BenchmarkIsolated/SyncMap_+_Load_>_LoadOrStore/custom_metrics	allowed(rps/user)=1600.424460	total(rps/user)=113752.088646
+BenchmarkIsolated/SyncMap_+_Load_>_Store
+BenchmarkIsolated/SyncMap_+_Load_>_Store-10        	381731274	        32.86 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIsolated/SyncMap_+_Load_>_Store/custom_metrics	allowed=5506375.000000	disallowed=376224899.000000	lapsed=12.543177
+BenchmarkIsolated/SyncMap_+_Load_>_Store/custom_metrics	allowed(rps)=438993.634054	total(rps)=30433379.347647
+BenchmarkIsolated/SyncMap_+_Load_>_Store/custom_metrics	allowed(rps/user)=1714.818883	total(rps/user)=118880.388077
+BenchmarkIsolated/Redis
+BenchmarkIsolated/Redis-10                         	  508934	     22967 ns/op	     682 B/op	      23 allocs/op
+BenchmarkIsolated/Redis/custom_metrics	allowed=508934.000000	disallowed=0.000000	lapsed=11.688582
+BenchmarkIsolated/Redis/custom_metrics	allowed(rps)=43541.124307	total(rps)=43541.124307
+BenchmarkIsolated/Redis/custom_metrics	allowed(rps/user)=170.082517	total(rps/user)=170.082517
+BenchmarkIsolated/Redis_With_Delay_(2_syncs_per_second)
+BenchmarkIsolated/Redis_With_Delay_(2_syncs_per_second)-10         	456504012	        26.94 ns/op	      16 B/op	       1 allocs/op
+BenchmarkIsolated/Redis_With_Delay_(2_syncs_per_second)/custom_metrics	allowed=8994226.000000	disallowed=447509786.000000	lapsed=12.298171
+BenchmarkIsolated/Redis_With_Delay_(2_syncs_per_second)/custom_metrics	allowed(rps)=731346.609593	total(rps)=37119665.598990
+BenchmarkIsolated/Redis_With_Delay_(2_syncs_per_second)/custom_metrics	allowed(rps/user)=2856.822694	total(rps/user)=144998.693746
+BenchmarkIsolated/Redis_With_Delay_(10_syncs_per_second)
+BenchmarkIsolated/Redis_With_Delay_(10_syncs_per_second)-10        	450622238	        26.05 ns/op	      16 B/op	       1 allocs/op
+BenchmarkIsolated/Redis_With_Delay_(10_syncs_per_second)/custom_metrics	allowed=8434703.000000	disallowed=442187535.000000	lapsed=11.739290
+BenchmarkIsolated/Redis_With_Delay_(10_syncs_per_second)/custom_metrics	allowed(rps)=718501.968223	total(rps)=38385816.895756
+BenchmarkIsolated/Redis_With_Delay_(10_syncs_per_second)/custom_metrics	allowed(rps/user)=2806.648313	total(rps/user)=149944.597249
+PASS
+ok  	github.com/yesyoukenspace/go-ratelimit/v1/ratelimit	128.294s

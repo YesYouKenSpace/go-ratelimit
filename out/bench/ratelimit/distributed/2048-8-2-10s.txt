@@ -1,0 +1,23 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/yesyoukenspace/go-ratelimit/v1/ratelimit
+cpu: Apple M1 Pro
+BenchmarkDistributed
+BenchmarkDistributed/parameters	totalConcurrency: 2048, concurrencyPerUser: 8, users: 256, numServers: 2, rate: 3000.000000, burst: 3000
+BenchmarkDistributed/Redis
+BenchmarkDistributed/Redis-10         	  489234	     21076 ns/op	     700 B/op	      23 allocs/op
+BenchmarkDistributed/Redis/custom_metrics	allowed=489234.000000	disallowed=0.000000	lapsed=10.310962
+BenchmarkDistributed/Redis/custom_metrics	allowed(rps)=47447.949661	total(rps)=47447.949661
+BenchmarkDistributed/Redis/custom_metrics	allowed(rps/user)=185.343553	total(rps/user)=185.343553
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)-10         	412078730	        27.78 ns/op	      16 B/op	       1 allocs/op
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed=6808406.000000	disallowed=405270324.000000	lapsed=11.446311
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed(rps)=594812.230503	total(rps)=36001006.481444
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed(rps/user)=2323.485275	total(rps/user)=140628.931568
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)-10        	480509314	        26.20 ns/op	      16 B/op	       1 allocs/op
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed=9552801.000000	disallowed=470956513.000000	lapsed=12.589614
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed(rps)=758784.272087	total(rps)=38167120.832369
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed(rps/user)=2964.001063	total(rps/user)=149090.315751
+PASS
+ok  	github.com/yesyoukenspace/go-ratelimit/v1/ratelimit	40.651s

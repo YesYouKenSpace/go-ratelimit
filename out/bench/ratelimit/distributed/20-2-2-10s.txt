@@ -1,0 +1,23 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/yesyoukenspace/go-ratelimit/v1/ratelimit
+cpu: Apple M1 Pro
+BenchmarkDistributed
+BenchmarkDistributed/parameters	totalConcurrency: 20, concurrencyPerUser: 2, users: 10, numServers: 2, rate: 3000.000000, burst: 3000
+BenchmarkDistributed/Redis
+BenchmarkDistributed/Redis-10         	  547263	     21492 ns/op	     669 B/op	      22 allocs/op
+BenchmarkDistributed/Redis/custom_metrics	allowed=363324.000000	disallowed=183939.000000	lapsed=11.761906
+BenchmarkDistributed/Redis/custom_metrics	allowed(rps)=30889.891485	total(rps)=46528.428301
+BenchmarkDistributed/Redis/custom_metrics	allowed(rps/user)=3088.989149	total(rps/user)=4652.842830
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)-10         	557631236	        21.46 ns/op	      16 B/op	       1 allocs/op
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed=291606.000000	disallowed=557339630.000000	lapsed=11.967591
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed(rps)=24366.307982	total(rps)=46595112.710333
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed(rps/user)=2436.630798	total(rps/user)=4659511.271033
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)-10        	595137884	        21.64 ns/op	      16 B/op	       1 allocs/op
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed=342303.000000	disallowed=594795581.000000	lapsed=12.879161
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed(rps)=26578.050218	total(rps)=46209365.876870
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed(rps/user)=2657.805022	total(rps/user)=4620936.587687
+PASS
+ok  	github.com/yesyoukenspace/go-ratelimit/v1/ratelimit	41.341s

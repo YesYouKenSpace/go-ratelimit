@@ -16,7 +16,7 @@ func BenchmarkLimiter(b *testing.B) {
 		limiter Limiter
 	}{
 		{name: "Bucket", limiter: NewBucket()},
-		{name: "DefaultLimiter", limiter: NewBuiltinLimiter(r, burst)},
+		{name: "BuiltinLimiter", limiter: NewBuiltinLimiter(r, burst)},
 		{name: "ResetBasedLimiter", limiter: NewResetbasedLimiter()},
 	}
 

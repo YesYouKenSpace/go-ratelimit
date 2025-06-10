@@ -56,9 +56,11 @@ func (d *RWMutex[Limiter]) getLimiter(key string) limiter.Limiter {
 	d.mu.RUnlock()
 	if !ok {
 		d.mu.Lock()
-		defer d.mu.Unlock()
-		l = d.newLimiterFn()
-		d.limiters[key] = l
+		if l, ok = d.limiters[key]; !ok {
+			l = d.newLimiterFn()
+			d.limiters[key] = l
+		}
+		d.mu.Unlock()
 	}
 	return l
 }
