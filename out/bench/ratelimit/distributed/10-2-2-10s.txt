@@ -1,0 +1,23 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/yesyoukenspace/go-ratelimit/v1/ratelimit
+cpu: Apple M1 Pro
+BenchmarkDistributed
+BenchmarkDistributed/parameters	totalConcurrency: 10, concurrencyPerUser: 2, users: 5, numServers: 2, rate: 3000.000000, burst: 3000
+BenchmarkDistributed/Redis
+BenchmarkDistributed/Redis-10         	  546966	     25286 ns/op	     669 B/op	      22 allocs/op
+BenchmarkDistributed/Redis/custom_metrics	allowed=207463.000000	disallowed=339503.000000	lapsed=13.830406
+BenchmarkDistributed/Redis/custom_metrics	allowed(rps)=15000.499534	total(rps)=39548.079551
+BenchmarkDistributed/Redis/custom_metrics	allowed(rps/user)=3000.099907	total(rps/user)=7909.615910
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)-10         	546552318	        22.24 ns/op	      16 B/op	       1 allocs/op
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed=154060.000000	disallowed=546398258.000000	lapsed=12.156780
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed(rps)=12672.763329	total(rps)=44958640.612792
+BenchmarkDistributed/Redis_with_delay_in_sync_(2_syncs_per_second)/custom_metrics	allowed(rps/user)=2534.552666	total(rps/user)=8991728.122558
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)-10        	596695078	        22.13 ns/op	      16 B/op	       1 allocs/op
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed=174739.000000	disallowed=596520339.000000	lapsed=13.206475
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed(rps)=13231.312755	total(rps)=45182009.718361
+BenchmarkDistributed/Redis_with_delay_in_sync_(10_syncs_per_second)/custom_metrics	allowed(rps/user)=2646.262551	total(rps/user)=9036401.943672
+PASS
+ok  	github.com/yesyoukenspace/go-ratelimit/v1/ratelimit	53.602s

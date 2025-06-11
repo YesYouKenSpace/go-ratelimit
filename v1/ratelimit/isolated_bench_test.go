@@ -3,7 +3,6 @@ package ratelimit
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -22,7 +21,7 @@ func newRDB(dbIndexes ...int) *redis.Client {
 	if len(dbIndexes) > 0 {
 		dbIndex = dbIndexes[0]
 	}
-	client := redis.NewClient(&redis.Options{Addr: "localhost:6379", MaxRetries: -1, DialTimeout: 20 * time.Millisecond, PoolTimeout: 0, ContextTimeoutEnabled: true, DB: dbIndex})
+	client := redis.NewClient(&redis.Options{Addr: "localhost:6379", MaxRetries: -1, PoolTimeout: 0, ContextTimeoutEnabled: true, DB: dbIndex})
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		panic(err)
 	}
@@ -30,45 +29,57 @@ func newRDB(dbIndexes ...int) *redis.Client {
 }
 
 func BenchmarkIsolated(b *testing.B) {
-	rate := math.Pow10(6)
-	burst := int(math.Pow10(6))
+	rate := 3000.0
+	burst := 3000
+	redisClient := newRDB()
 
 	ratelimiters := []struct {
 		name    string
 		limiter Ratelimiter
 	}{
+		{name: "Map + Mutex", limiter: NewMutex(NewDefaultLimiter)},
+		{name: "Map + RWMutex", limiter: NewRWMutex(NewDefaultLimiter)},
 		{name: "SyncMap + LoadOrStore", limiter: NewSyncMapLoadOrStore(NewDefaultLimiter)},
 		{name: "SyncMap + Load > LoadOrStore", limiter: NewSyncMapLoadThenLoadOrStore(NewDefaultLimiter)},
 		{name: "SyncMap + Load > Store", limiter: NewSyncMapLoadThenStore(NewDefaultLimiter)},
-		{name: "Map + Mutex", limiter: NewMutex(NewDefaultLimiter)},
-		{name: "Map + RWMutex", limiter: NewRWMutex(NewDefaultLimiter)},
-		{name: "Redis", limiter: NewGoRedis(newRDB())},
-		{name: "Redis With Delay", limiter: NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-			RedisClient:  newRDB(),
+		{name: "Redis", limiter: NewGoRedis(redisClient)},
+		{name: "Redis With Delay (2 syncs per second)", limiter: NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
+			RedisClient:  redisClient,
 			SyncInterval: time.Second / 2,
 		})},
+		{name: "Redis With Delay (10 syncs per second)", limiter: NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
+			RedisClient:  redisClient,
+			SyncInterval: time.Second / 10,
+		})},
 	}
-	concurrentUsers := 32768
-	if os.Getenv("CONCURRENT_USERS") != "" {
-		concurrentUsers, _ = strconv.Atoi(os.Getenv("CONCURRENT_USERS"))
+	totalConcurrency := 32768
+	if os.Getenv("TOTAL_CONCURRENCY") != "" {
+		totalConcurrency, _ = strconv.Atoi(os.Getenv("TOTAL_CONCURRENCY"))
 	}
+	concurrencyPerUser := 8
+	if os.Getenv("CONCURRENCY_PER_USER") != "" {
+		concurrencyPerUser, _ = strconv.Atoi(os.Getenv("CONCURRENCY_PER_USER"))
+	}
+	fmt.Printf("%s/parameters\ttotalConcurrency: %d, concurrencyPerUser: %d, users: %d, rate: %f, burst: %d\n", b.Name(), totalConcurrency, concurrencyPerUser, totalConcurrency/concurrencyPerUser, rate, burst)
 	for _, limiter := range ratelimiters {
 		benchmarkIsolated(b, benchmarkIsolatedConfig{
-			name:            limiter.name,
-			concurrentUsers: concurrentUsers,
-			burst:           burst,
-			rate:            rate,
-			limiter:         limiter.limiter,
+			name:               limiter.name,
+			totalConcurrency:   totalConcurrency,
+			concurrencyPerUser: concurrencyPerUser,
+			burst:              burst,
+			rate:               rate,
+			limiter:            limiter.limiter,
 		})
 	}
 }
 
 type benchmarkIsolatedConfig struct {
-	name            string
-	concurrentUsers int
-	limiter         Ratelimiter
-	rate            float64
-	burst           int
+	name               string
+	totalConcurrency   int
+	concurrencyPerUser int
+	limiter            Ratelimiter
+	rate               float64
+	burst              int
 }
 
 func benchmarkIsolated(b *testing.B, c benchmarkIsolatedConfig) bool {
@@ -76,11 +87,11 @@ func benchmarkIsolated(b *testing.B, c benchmarkIsolatedConfig) bool {
 	name := strings.ReplaceAll(c.name, " ", "_")
 	runResult := b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
-		b.SetParallelism(c.concurrentUsers)
+		b.SetParallelism(c.totalConcurrency)
 		allowed := atomic.Int64{}
 		disallowed := atomic.Int64{}
 		b.RunParallel(func(pb *testing.PB) {
-			rStr := utils.RandString(4)
+			rStr := strconv.FormatInt(utils.RandInt(0, int64(c.totalConcurrency/c.concurrencyPerUser)), 10)
 			a := int64(0)
 			d := int64(0)
 			for pb.Next() {
@@ -100,7 +111,8 @@ func benchmarkIsolated(b *testing.B, c benchmarkIsolatedConfig) bool {
 			maxDisallowed = float64(disallowed.Load())
 		}
 	})
-
-	fmt.Printf("%s/custom_metrics\tallowed=%f\tdisallowed=%f\tlapsed=%f\tallowed(rps)=%f\ttotal(rps)=%f\n", b.Name()+"/"+name, maxAllowed, maxDisallowed, maxLapsed, maxAllowed/maxLapsed, (maxAllowed+maxDisallowed)/maxLapsed)
+	fmt.Printf("%s/custom_metrics\tallowed=%f\tdisallowed=%f\tlapsed=%f\n", b.Name()+"/"+name, maxAllowed, maxDisallowed, maxLapsed)
+	fmt.Printf("%s/custom_metrics\tallowed(rps)=%f\ttotal(rps)=%f\n", b.Name()+"/"+name, maxAllowed/maxLapsed, (maxAllowed+maxDisallowed)/maxLapsed)
+	fmt.Printf("%s/custom_metrics\tallowed(rps/user)=%f\ttotal(rps/user)=%f\n", b.Name()+"/"+name, maxAllowed/maxLapsed/float64(c.totalConcurrency/c.concurrencyPerUser), (maxAllowed+maxDisallowed)/maxLapsed/float64(c.totalConcurrency/c.concurrencyPerUser))
 	return runResult
 }

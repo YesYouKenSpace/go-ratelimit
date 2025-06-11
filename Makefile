@@ -2,7 +2,9 @@
 
 TEST_COUNT?=1
 TEST_BENCHTIME?=10s
-CONCURRENT_USERS?=32768
+TOTAL_CONCURRENCY?=10
+CONCURRENCY_PER_USER?=2
+NUM_SERVERS?=2
 
 test:
 	go test -race -covermode=atomic -coverprofile=coverage.out -test.count=$(TEST_COUNT) ./... -v -parallel=8
@@ -23,15 +25,15 @@ bench-limiter:
 
 bench-isolated:
 	mkdir -p out/bench/ratelimit/isolated; \
-	draft=out/bench/ratelimit/isolated/$(CONCURRENT_USERS)-$(TEST_BENCHTIME).txt.draft; \
-	out=out/bench/ratelimit/isolated/$(CONCURRENT_USERS)-$(TEST_BENCHTIME).txt; \
-	CONCURRENT_USERS=$(CONCURRENT_USERS) go test ./v1/ratelimit/... -v -bench=BenchmarkIsolated -run=^$ -test.count=$(TEST_COUNT) -test.benchtime=$(TEST_BENCHTIME) > $$draft; \
+	draft=out/bench/ratelimit/isolated/$(TOTAL_CONCURRENCY)-$(CONCURRENCY_PER_USER)-$(TEST_BENCHTIME).txt.draft; \
+	out=out/bench/ratelimit/isolated/$(TOTAL_CONCURRENCY)-$(CONCURRENCY_PER_USER)-$(TEST_BENCHTIME).txt; \
+	TOTAL_CONCURRENCY=$(TOTAL_CONCURRENCY) CONCURRENCY_PER_USER=$(CONCURRENCY_PER_USER) go test ./v1/ratelimit/... -v -bench=BenchmarkIsolated -run=^$ -test.count=$(TEST_COUNT) -test.benchtime=$(TEST_BENCHTIME) > $$draft; \
 	cat $$draft > $$out
 
 bench-distributed:
 # -run=^$ to avoid running any tests
 	mkdir -p out/bench/ratelimit/distributed; \
-	draft=out/bench/ratelimit/distributed/$(CONCURRENT_USERS)-$(TEST_BENCHTIME).txt.draft; \
-	out=out/bench/ratelimit/distributed/$(CONCURRENT_USERS)-$(TEST_BENCHTIME).txt; \
-	CONCURRENT_USERS=$(CONCURRENT_USERS) go test ./v1/ratelimit/... -v -bench=BenchmarkDistributed -run=^$ -test.count=$(TEST_COUNT) -test.benchtime=$(TEST_BENCHTIME) > $$draft; \
+	draft=out/bench/ratelimit/distributed/$(TOTAL_CONCURRENCY)-$(CONCURRENCY_PER_USER)-$(NUM_SERVERS)-$(TEST_BENCHTIME).txt.draft; \
+	out=out/bench/ratelimit/distributed/$(TOTAL_CONCURRENCY)-$(CONCURRENCY_PER_USER)-$(NUM_SERVERS)-$(TEST_BENCHTIME).txt; \
+	TOTAL_CONCURRENCY=$(TOTAL_CONCURRENCY) CONCURRENCY_PER_USER=$(CONCURRENCY_PER_USER) NUM_SERVERS=$(NUM_SERVERS) go test ./v1/ratelimit/... -v -bench=BenchmarkDistributed -run=^$ -test.count=$(TEST_COUNT) -test.benchtime=$(TEST_BENCHTIME) > $$draft; \
 	cat $$draft > $$out

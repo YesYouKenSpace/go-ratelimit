@@ -39,6 +39,14 @@ func (d *SyncMapLoadThenLoadOrStore[Limiter]) ForceN(key string, cost int, reple
 	return l.(limiter.Limiter).ForceN(cost, replenishPerSecond, burst), nil
 }
 
+func (d *SyncMapLoadThenLoadOrStore[Limiter]) GetLimiter(key string) Limiter {
+	l, ok := d.limiters.Load(key)
+	if !ok {
+		l, _ = d.limiters.LoadOrStore(key, d.newLimiterFn())
+	}
+	return l.(Limiter)
+}
+
 type SyncMapLoadOrStore[Limiter limiter.Limiter] struct {
 	limiters     sync.Map
 	newLimiterFn func() Limiter
@@ -81,10 +89,19 @@ func (r *SyncMapLoadThenStore[Limiter]) AllowN(key string, cost int, replenishPe
 	return l.(Limiter).AllowN(cost, replenishPerSecond, burst), nil
 }
 
+func (r *SyncMapLoadThenStore[Limiter]) ForceN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
+	l, ok := r.limiters.Load(key)
+	if !ok {
+		l = r.newLimiterFn()
+		r.limiters.Store(key, l)
+	}
+	return l.(Limiter).ForceN(cost, replenishPerSecond, burst), nil
+}
+
 func (r *SyncMapLoadThenStore[Limiter]) GetLimiter(key string) Limiter {
 	l, ok := r.limiters.Load(key)
 	if !ok {
-		l = limiter.NewResetbasedLimiter()
+		l = r.newLimiterFn()
 		r.limiters.Store(key, l)
 	}
 	return l.(Limiter)
