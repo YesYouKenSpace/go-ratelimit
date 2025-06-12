@@ -140,6 +140,26 @@ func (r *RedisDelayedSync) syncAll() error {
 	return nil
 }
 
+func (r *RedisDelayedSync) executeCorruptedRemoteRecovery(key string, limiter *limiter.ResetBasedLimiter, delta int64, lastSynced int64) error {
+	switch r.corruptedRemotePolicy {
+	case RedisDelayedSyncCorruptedRemotePolicyUploadLocal:
+		cmd := r.redisClient.Set(r.ctx, key, lastSynced, 0)
+		if cmd.Err() != nil {
+			return cmd.Err()
+		}
+	case RedisDelayedSyncCorruptedRemotePolicyReset:
+		r.lastSyncedResetAt.Store(key, 0)
+	default:
+		return fmt.Errorf("invalid corrupted remote policy: %s", r.corruptedRemotePolicy)
+	}
+
+	// We need to add the delta back to the limiter and wait for the next sync.
+	// We could have done SET lastSynced + delta but it would result in a race condition
+	// where multiple servers could be setting the key at the same time and overwriting each other local delta.
+	limiter.AddDeltaSinceLastPop(delta)
+	return nil
+}
+
 // Note: This function is not thread safe
 func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 	limiter := r.inner.GetLimiter(key)
@@ -174,6 +194,9 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 	} else {
 		cmd := r.redisClient.Get(r.ctx, key)
 		if cmd.Err() == redis.Nil {
+			if hasSyncedBefore {
+				return r.executeCorruptedRemoteRecovery(key, limiter, delta, lastSynced.(int64))
+			}
 			return nil
 		}
 		if cmd.Err() != nil {
@@ -210,22 +233,7 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 	// Case: The remote value is corrupted, this could happen if redis server is restarted or if they were deleted
 	// See `RedisDelayedSyncCorruptedRemotePolicy` for the policy to handle this case
 	if remoteValue < lastSynced.(int64) {
-		switch r.corruptedRemotePolicy {
-		case RedisDelayedSyncCorruptedRemotePolicyUploadLocal:
-			cmd := r.redisClient.Set(r.ctx, key, lastSynced.(int64), 0)
-			if cmd.Err() != nil {
-				return cmd.Err()
-			}
-		case RedisDelayedSyncCorruptedRemotePolicyReset:
-			r.lastSyncedResetAt.Store(key, 0)
-		default:
-			return fmt.Errorf("invalid corrupted remote policy: %s", r.corruptedRemotePolicy)
-		}
-		// We need to add the delta back to the limiter and wait for the next sync.
-		// We could have done SET lastSynced + delta but it would result in a race condition
-		// where multiple servers could be setting the key at the same time and overwriting each other local delta.
-		limiter.AddDeltaSinceLastPop(delta)
-		return nil
+		return r.executeCorruptedRemoteRecovery(key, limiter, delta, lastSynced.(int64))
 	}
 	// diff==0: if the key is not incremented by another server
 	// diff>0: if the key is incremented by another server
@@ -234,8 +242,9 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 	if resetAt < expiry && delta == 0 {
 		r.lastSyncedResetAt.Delete(key)
 		if diff == 0 {
+			expireIn := max(r.keyExpiry, time.Until(time.Unix(0, remoteValue)))
 			// this means that the redis key is in sync with the local resetAt value, meaning no other server has set the key in redis and we can expire the key in redis
-			r.redisClient.Expire(r.ctx, key, r.keyExpiry)
+			r.redisClient.ExpireNX(r.ctx, key, expireIn)
 		}
 		return nil
 	}
