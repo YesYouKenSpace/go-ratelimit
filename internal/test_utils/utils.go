@@ -1,4 +1,4 @@
-package utils
+package test_utils
 
 import (
 	"crypto/rand"
@@ -12,20 +12,6 @@ func IsCloseEnough(a, b, tolerance float64) bool {
 		panic("tolerance must be between 0 and 0.5")
 	}
 	return a >= math.Floor(b*(1-tolerance)) && a <= math.Ceil(b*(1+tolerance))
-}
-
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func Max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func RandString(bytes int) string {
@@ -43,7 +29,4 @@ func RandInt(min, max int64) int64 {
 	} else {
 		panic(err)
 	}
-}
-func ExpectedAllowedRequests(burst float64, reqPerSec float64, seconds float64) int {
-	return int(reqPerSec*seconds) + int(burst)
 }

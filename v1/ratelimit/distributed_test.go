@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yesyoukenspace/go-ratelimit/internal/utils"
+	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
 func TestDistributedAllow(t *testing.T) {
@@ -61,7 +61,7 @@ type testDistributedRatelimiterConfig struct {
 func testDistributedRatelimiter(t *testing.T, name string, constructor func() Ratelimiter, tt testDistributedRatelimiterConfig) {
 	t.Run(fmt.Sprintf("ratelimiter=%s;rps=%2f;burst=%d;instances=%d", name, tt.reqPerSec, tt.burst, tt.instances), func(t *testing.T) {
 		t.Parallel()
-		rStr := utils.RandString(4)
+		rStr := test_utils.RandString(4)
 		totalAllowed := 0
 		totalDenied := 0
 		ratelimiters := make([]Ratelimiter, tt.instances)
@@ -107,7 +107,7 @@ func testDistributedRatelimiter(t *testing.T, name string, constructor func() Ra
 			totalDenied += results[1]
 		}
 
-		if !utils.IsCloseEnough(float64(tt.expectedAllowed), float64(totalAllowed), tt.tolerance) {
+		if !test_utils.IsCloseEnough(float64(tt.expectedAllowed), float64(totalAllowed), tt.tolerance) {
 			t.Errorf("unexpected allowed: expected %d, got %d", tt.expectedAllowed, totalAllowed)
 		}
 		if totalDenied < 1 {

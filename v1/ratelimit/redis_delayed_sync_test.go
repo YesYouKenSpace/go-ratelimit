@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/yesyoukenspace/go-ratelimit/internal/utils"
+	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
 func TestRedisDelayedSync(t *testing.T) {
@@ -26,7 +26,7 @@ func TestRedisDelayedSync(t *testing.T) {
 	})
 
 	t.Run("GetResetAt should return 0 when the key is not used yet", func(t *testing.T) {
-		randomString := utils.RandString(10)
+		randomString := test_utils.RandString(10)
 		if ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt() != 0 {
 			t.Fatalf("reset at should be 0, but got %d", ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt())
 		}
@@ -35,7 +35,7 @@ func TestRedisDelayedSync(t *testing.T) {
 	t.Run("Synchronization tests", func(t *testing.T) {
 
 		t.Run("diffs should be equal after a full cycle of sync if there are no actions in between", func(t *testing.T) {
-			randomString := utils.RandString(10)
+			randomString := test_utils.RandString(10)
 			_, _ = ratelimiterAlpha.ForceN(randomString, 1, 1, 1)
 			_ = ratelimiterAlpha.sync(randomString, 0)
 			originalResetAtOfAlpha := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
@@ -77,7 +77,7 @@ func TestRedisDelayedSync(t *testing.T) {
 		})
 
 		t.Run("a server that joins the cluster later should not be able to allow more requests than the server that joined first", func(t *testing.T) {
-			randomString := utils.RandString(10)
+			randomString := test_utils.RandString(10)
 			if _, err := ratelimiterAlpha.ForceN(randomString, 600, 10, 10); err != nil {
 				t.Fatalf("failed to force: %v", err)
 			}
@@ -111,8 +111,11 @@ func TestRedisDelayedSync(t *testing.T) {
 			}
 		})
 
-		t.Run("should preserve all local deltas when using corrupted remote policy", func(t *testing.T) {
-			randomString := utils.RandString(10)
+		t.Run("RedisDelayedSyncCorruptedRemotePolicyUploadLocal", func(t *testing.T) {
+			ratelimiterAlpha.corruptedRemotePolicy = RedisDelayedSyncCorruptedRemotePolicyUploadLocal
+			ratelimiterBeta.corruptedRemotePolicy = RedisDelayedSyncCorruptedRemotePolicyUploadLocal
+
+			randomString := test_utils.RandString(10)
 			_, _ = ratelimiterAlpha.ForceN(randomString, 2, 1, 1000)
 			_ = ratelimiterAlpha.sync(randomString, 0)
 			_ = ratelimiterBeta.sync(randomString, 0)
@@ -195,5 +198,28 @@ func TestRedisDelayedSync(t *testing.T) {
 			}
 
 		})
+	})
+
+	t.Run("RedisDelayedSyncCorruptedRemotePolicyReset", func(t *testing.T) {
+		ratelimiterAlpha.corruptedRemotePolicy = RedisDelayedSyncCorruptedRemotePolicyReset
+		ratelimiterBeta.corruptedRemotePolicy = RedisDelayedSyncCorruptedRemotePolicyReset
+
+		randomString := test_utils.RandString(10)
+		_, _ = ratelimiterAlpha.ForceN(randomString, 2, 1, 1000)
+		_ = ratelimiterAlpha.sync(randomString, 0)
+		_ = ratelimiterBeta.sync(randomString, 0)
+		// Corrupt the remote value
+		redisClient.Set(context.Background(), randomString, time.Now().Add(-1*time.Hour).Unix(), 0)
+		_ = ratelimiterAlpha.sync(randomString, 0)
+		_ = ratelimiterBeta.sync(randomString, 0)
+
+		lastSyncedResetAtOfAlpha, _ := ratelimiterAlpha.lastSyncedResetAt.Load(randomString)
+		lastSyncedResetAtOfBeta, _ := ratelimiterBeta.lastSyncedResetAt.Load(randomString)
+		if lastSyncedResetAtOfAlpha != 0 {
+			t.Fatalf("last synced reset at should be 0, but got %d", lastSyncedResetAtOfAlpha)
+		}
+		if lastSyncedResetAtOfBeta != 0 {
+			t.Fatalf("last synced reset at should be 0, but got %d", lastSyncedResetAtOfBeta)
+		}
 	})
 }

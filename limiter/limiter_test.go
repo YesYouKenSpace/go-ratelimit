@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yesyoukenspace/go-ratelimit/internal/utils"
+	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
 var limiters = []struct {
@@ -104,7 +104,7 @@ func TestLimiterAllow(t *testing.T) {
 					}
 				}
 
-				if !utils.IsCloseEnough(float64(tt.expectedAllowed), float64(allowed), tt.tolerance) {
+				if !test_utils.IsCloseEnough(float64(tt.expectedAllowed), float64(allowed), tt.tolerance) {
 					t.Errorf("expected %d, got %d", tt.expectedAllowed, allowed)
 				}
 				if denied < 1 {

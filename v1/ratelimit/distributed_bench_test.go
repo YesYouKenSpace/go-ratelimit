@@ -11,7 +11,7 @@ import (
 
 	"testing"
 
-	"github.com/yesyoukenspace/go-ratelimit/internal/utils"
+	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
 func BenchmarkDistributed(b *testing.B) {
@@ -88,8 +88,8 @@ func benchmarkDistributed(b *testing.B, c benchmarkDistributedConfig) bool {
 		}
 		b.RunParallel(func(pb *testing.PB) {
 			// To simulate different users hitting different rate limiters in a distributed system
-			rStr := strconv.FormatInt(utils.RandInt(0, int64(c.totalConcurrency/c.avgConcurrencyPerUser)), 10)
-			rl := rls[utils.RandInt(0, int64(c.numServers))]
+			rStr := strconv.FormatInt(test_utils.RandInt(0, int64(c.totalConcurrency/c.avgConcurrencyPerUser)), 10)
+			rl := rls[test_utils.RandInt(0, int64(c.numServers))]
 			a := int64(0)
 			d := int64(0)
 			for pb.Next() {

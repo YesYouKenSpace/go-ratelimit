@@ -1,4 +1,4 @@
-.PHONY: test bench-all bench-limiter bench-ratelimit
+.PHONY: test bench-all bench-limiter bench-ratelimit clean-coverage coverage lint
 
 TEST_COUNT?=1
 TEST_BENCHTIME?=10s
@@ -8,6 +8,11 @@ NUM_SERVERS?=2
 
 test:
 	go test -race -covermode=atomic -coverprofile=coverage.out -test.count=$(TEST_COUNT) ./... -v -parallel=8
+	$(MAKE) clean-coverage
+
+clean-coverage:
+	grep -v -E -f .covignore coverage.out > coverage.out.draft
+	mv coverage.out.draft coverage.out
 
 coverage:
 	go tool cover -html=coverage.out

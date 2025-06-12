@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yesyoukenspace/go-ratelimit/internal/utils"
+	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
 func TestIsolatedAllow(t *testing.T) {
@@ -102,7 +102,7 @@ type testRatelimiterConfig struct {
 
 func testRatelimiter(t *testing.T, name string, constructor func() Ratelimiter, tt testRatelimiterConfig) {
 	t.Run(fmt.Sprintf("ratelimiter=%s;rps=%2f;burst=%d", name, tt.reqPerSec, tt.burst), func(t *testing.T) {
-		rStr := utils.RandString(4)
+		rStr := test_utils.RandString(4)
 		t.Parallel()
 		allowed := 0
 		denied := 0
@@ -129,7 +129,7 @@ func testRatelimiter(t *testing.T, name string, constructor func() Ratelimiter, 
 				}
 			}
 		}
-		if !utils.IsCloseEnough(float64(tt.expectedAllowed), float64(allowed), tt.tolerance) {
+		if !test_utils.IsCloseEnough(float64(tt.expectedAllowed), float64(allowed), tt.tolerance) {
 			t.Errorf("expected %d, got %d", tt.expectedAllowed, allowed)
 		}
 		if denied < 1 {

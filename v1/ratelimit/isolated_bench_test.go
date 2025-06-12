@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/yesyoukenspace/go-ratelimit/internal/utils"
+	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
 func newRDB(dbIndexes ...int) *redis.Client {
@@ -91,7 +91,7 @@ func benchmarkIsolated(b *testing.B, c benchmarkIsolatedConfig) bool {
 		allowed := atomic.Int64{}
 		disallowed := atomic.Int64{}
 		b.RunParallel(func(pb *testing.PB) {
-			rStr := strconv.FormatInt(utils.RandInt(0, int64(c.totalConcurrency/c.concurrencyPerUser)), 10)
+			rStr := strconv.FormatInt(test_utils.RandInt(0, int64(c.totalConcurrency/c.concurrencyPerUser)), 10)
 			a := int64(0)
 			d := int64(0)
 			for pb.Next() {
