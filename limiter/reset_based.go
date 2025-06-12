@@ -37,7 +37,7 @@ func (l *ResetBasedLimiter) allowN(n int, replenishPerSecond float64, burst int,
 		return false
 	}
 	l.resetAt.Store(newResetAt)
-	l.deltaSinceLastPop.Add(incrementInNano)
+	l.AddDeltaSinceLastPop(incrementInNano)
 	return true
 }
 
@@ -59,4 +59,8 @@ func (l *ResetBasedLimiter) GetResetAt() int64 {
 
 func (l *ResetBasedLimiter) PopResetAtDelta() int64 {
 	return l.deltaSinceLastPop.Swap(0)
+}
+
+func (l *ResetBasedLimiter) AddDeltaSinceLastPop(delta int64) {
+	l.deltaSinceLastPop.Add(delta)
 }

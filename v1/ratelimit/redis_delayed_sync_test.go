@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,14 +15,14 @@ func TestRedisDelayedSync(t *testing.T) {
 		Addr: "localhost:6379",
 	})
 	ratelimiterAlpha := NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-		RedisClient: redisClient,
-		// SyncInterval: 1 * time.Hour,
-		DisableAutoSync: true,
+		RedisClient:           redisClient,
+		DisableAutoSync:       true,
+		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
 	})
 	ratelimiterBeta := NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-		RedisClient: redisClient,
-		// SyncInterval: 1 * time.Hour,
-		DisableAutoSync: true,
+		RedisClient:           redisClient,
+		DisableAutoSync:       true,
+		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
 	})
 
 	t.Run("GetResetAt should return 0 when the key is not used yet", func(t *testing.T) {
@@ -108,6 +109,91 @@ func TestRedisDelayedSync(t *testing.T) {
 			if allowed {
 				t.Fatalf("should not be allowed")
 			}
+		})
+
+		t.Run("should preserve all local deltas when using corrupted remote policy", func(t *testing.T) {
+			randomString := utils.RandString(10)
+			_, _ = ratelimiterAlpha.ForceN(randomString, 2, 1, 1000)
+			_ = ratelimiterAlpha.sync(randomString, 0)
+			_ = ratelimiterBeta.sync(randomString, 0)
+
+			corrupt := func() {
+				redisClient.Set(context.Background(), randomString, time.Now().Add(-1*time.Hour).Unix(), 0)
+			}
+
+			testCases := []struct {
+				scenario     func()
+				expectedDiff time.Duration
+			}{
+				{
+					scenario: func() {
+						_, _ = ratelimiterAlpha.ForceN(randomString, 3, 1, 1000)
+						_, _ = ratelimiterBeta.ForceN(randomString, 5, 1, 1000)
+						corrupt()
+					},
+					expectedDiff: 8 * time.Second,
+				},
+				{
+					scenario: func() {
+						_, _ = ratelimiterAlpha.ForceN(randomString, 3, 1, 1000)
+						_ = ratelimiterAlpha.sync(randomString, 0)
+						corrupt()
+						_, _ = ratelimiterBeta.ForceN(randomString, 5, 1, 1000)
+						_ = ratelimiterBeta.sync(randomString, 0)
+					},
+					expectedDiff: 8 * time.Second,
+				},
+				{
+					scenario: func() {
+						_, _ = ratelimiterAlpha.ForceN(randomString, 3, 1, 1000)
+						_ = ratelimiterAlpha.sync(randomString, 0)
+						corrupt()
+						_, _ = ratelimiterAlpha.ForceN(randomString, 5, 1, 1000)
+						_, _ = ratelimiterBeta.ForceN(randomString, 7, 1, 1000)
+						_ = ratelimiterBeta.sync(randomString, 0)
+						corrupt()
+					},
+					expectedDiff: 15 * time.Second,
+				},
+				{
+					// This test case shows that if a server manages to sync twice before the other server even syncs once after corruption
+					// We lost delta of the sync that happened before the corruption
+					scenario: func() {
+						_, _ = ratelimiterAlpha.ForceN(randomString, 3, 1, 1000)
+						_ = ratelimiterAlpha.sync(randomString, 0)
+						corrupt()
+						_, _ = ratelimiterAlpha.ForceN(randomString, 5, 1, 1000)
+						_, _ = ratelimiterBeta.ForceN(randomString, 7, 1, 1000)
+						_ = ratelimiterBeta.sync(randomString, 0)
+						_ = ratelimiterBeta.sync(randomString, 0)
+					},
+
+					expectedDiff: 12 * time.Second,
+				},
+			}
+			for i, testCase := range testCases {
+				t.Run(fmt.Sprintf("test case %d", i), func(t *testing.T) {
+					originalResetAtOfBeta := ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt()
+					originalResetAtOfAlpha := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+
+					testCase.scenario()
+					// full cycle of sync for both servers with no actions in between
+					_ = ratelimiterAlpha.sync(randomString, 0)
+					_ = ratelimiterBeta.sync(randomString, 0)
+					_ = ratelimiterAlpha.sync(randomString, 0)
+					_ = ratelimiterBeta.sync(randomString, 0)
+
+					diffA := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfAlpha
+					diffB := ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfBeta
+					if diffA != diffB {
+						t.Fatalf("diff should be equal, but got %d and %d", diffA, diffB)
+					}
+					if diffA != testCase.expectedDiff.Nanoseconds() {
+						t.Fatalf("diff should be %d, but got %d", testCase.expectedDiff.Nanoseconds(), diffA)
+					}
+				})
+			}
+
 		})
 	})
 }

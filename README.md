@@ -13,7 +13,7 @@
 
 ## Features
 
-- All `limiter.Limiter` implementations follow the `Ratelimit` interface in [domain.go](./domain.go) which closely follows `golang.org/x/time/rate` interface
+- All `limiter.Limiter` implementations follow the `Ratelimit` interface in [domain.go](./domain.go) which closely follows `golang.org/x/time/rate` interface naming for sake of familarity
 - Multiple synchronization mechanisms: `sync.Mutex`, `sync.RWMutex`, and `sync.Map`
 - Built-in benchmarking tools to compare different implementations
 - Support for both isolated and distributed rate limiting scenarios
@@ -28,6 +28,8 @@ go get -u github.com/yesyoukenspace/go-ratelimit
 ## Usage
 
 For usage examples, check out [distributed_bench_test.go](v1/ratelimit/distributed_bench_test.go) and [isolated_bench_test.go](v1/ratelimit/isolated_bench_test.go).
+
+We recommend to use `RedisDelayedSync` for the best performance. 
 
 ## Implementations
 
@@ -47,6 +49,31 @@ A high-performance distributed rate limiter designed for systems that prioritize
 - **Penalty Spillover**: If users exceed designated rate-limit globally, upon the next synchronization the user would still throttled accordingly
 - **Use Cases**: High-throughput distributed systems where occasional rate limit inaccuracies are acceptable
 
+##### Usage
+We recommend to use a different prefix to your keys if you require every deployment to reset the rate limits
+```go
+import "github.com/yesyoukenspace/go-ratelimit/v1/ratelimit"
+
+func main() {
+  limiter := ratelimit.NewRedisDelayedSync(context.Background(), ratelimit.RedisDelayedSyncOption{
+		SyncInterval: cfg.SyncInterval,
+		RedisClient:  cfg.RedisClient,
+		SyncErrorHandler: func(err error) {
+			cfg.Logger.Error("failed to sync ratelimit", "error", err)
+		},
+	})
+  ok, err := r.limiter.AllowN(key, int(n), float64(tps), int(burst))
+  if err != nil {
+    panic(err)
+  }
+  if ok {
+    fmt.Println("allowed")
+  } else {
+    fmt.Println("denied")
+  }
+}
+```
+##### Examples of how it `RedisDelayedSync` would work
 ```mermaid
 sequenceDiagram
     participant Client
@@ -57,8 +84,6 @@ sequenceDiagram
       participant RDS2 as RedisDelayedSync2
     end
     participant Redis
-
-
 
     Note over RDS1: Initial State: 5 tokens available
     Note over RDS2: Initial State: 5 tokens available
