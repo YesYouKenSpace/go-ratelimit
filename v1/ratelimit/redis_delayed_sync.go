@@ -22,7 +22,7 @@ const (
 	// with the assumption that the individual servers' sync are evenly spaced.
 	RedisDelayedSyncCorruptedRemotePolicyUploadLocal RedisDelayedSyncCorruptedRemotePolicy = "UPLOAD_LOCAL"
 	// RESET: Reset the key to 0
-	// This policy effective resets the key, delta push will be delayed until the next sync.
+	// This policy effectively resets the key, delta push will be delayed until the next sync.
 	// Upon the next sync, it would be as though it is the key's first sync.
 	RedisDelayedSyncCorruptedRemotePolicyReset RedisDelayedSyncCorruptedRemotePolicy = "RESET"
 )
@@ -209,16 +209,6 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 		}
 	}
 	if !hasSyncedBefore {
-		// Case: The key is set by another server and the current server joins the cluster later after cluster inactivity but before key expiry
-		// We need to reset the key in redis to the local resetAt value
-		if remoteValue < resetAt {
-			cmd := r.redisClient.Set(r.ctx, key, resetAt, 0)
-			if cmd.Err() != nil {
-				return cmd.Err()
-			}
-			r.lastSyncedResetAt.Store(key, resetAt)
-			return nil
-		}
 		// Case: The key is set by another server and the current server joins the cluster later
 		// If the remote value is greater than the local resetAt due to clock drifts between servers,
 		// this newly joined server will be penalized, we assume that the clock drift is not significant enough

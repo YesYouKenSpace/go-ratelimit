@@ -111,6 +111,34 @@ func TestRedisDelayedSync(t *testing.T) {
 			}
 		})
 
+		t.Run("a server than joined late should not have increase reset at of other servers more than it incurred", func(t *testing.T) {
+			randomString := test_utils.RandString(10)
+			if _, err := ratelimiterAlpha.ForceN(randomString, 1, 10, 10); err != nil {
+				t.Fatalf("failed to force: %v", err)
+			}
+			if err := ratelimiterAlpha.sync(randomString, 0); err != nil {
+				t.Fatalf("failed to sync: %v", err)
+			}
+			time.Sleep(2 * time.Second)
+			allowed, err := ratelimiterBeta.AllowN(randomString, 10, 10, 10)
+			if err != nil {
+				t.Fatalf("failed to allow: %v", err)
+			}
+			if !allowed {
+				t.Fatalf("should be allowed")
+			}
+			if err := ratelimiterBeta.sync(randomString, 0); err != nil {
+				t.Fatalf("failed to sync: %v", err)
+			}
+			resetAtBefore := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+			if err := ratelimiterAlpha.sync(randomString, 0); err != nil {
+				t.Fatalf("failed to sync: %v", err)
+			}
+			resetAtAfter := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+			if resetAtAfter-resetAtBefore <= 1 {
+				t.Fatalf("should not have adjusted for more than 1s, actual=%d", resetAtAfter-resetAtBefore)
+			}
+		})
 		t.Run("RedisDelayedSyncCorruptedRemotePolicyUploadLocal", func(t *testing.T) {
 			ratelimiterAlpha.corruptedRemotePolicy = RedisDelayedSyncCorruptedRemotePolicyUploadLocal
 			ratelimiterBeta.corruptedRemotePolicy = RedisDelayedSyncCorruptedRemotePolicyUploadLocal
