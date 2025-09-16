@@ -169,7 +169,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## License
 
-See the [LICENSE](LICENSE) file for details.
+See the [LICENSE](./LICENSE) file for details.
 
 ## References
 - [go-redis/redis_rate](https://github.com/go-redis/redis_rate)

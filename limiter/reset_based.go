@@ -19,6 +19,28 @@ func NewResetbasedLimiter() *ResetBasedLimiter {
 	return l
 }
 
+// Still in development, subject to changes, use at your own risks
+func (l *ResetBasedLimiter) ReserveN(n int, replenishPerSecond float64, burst int) Reservation {
+	now := time.Now().UnixNano()
+
+	nanosecondsPerToken := int64(float64(time.Second) / replenishPerSecond)
+	burstInNano := int64(burst) * nanosecondsPerToken
+
+	incrementInNano := int64(n) * nanosecondsPerToken
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	newResetAt := max(now-burstInNano, l.resetAt.Load())
+	newResetAt += incrementInNano
+	l.resetAt.Store(newResetAt)
+	l.AddDeltaSinceLastPop(incrementInNano)
+
+	return &resetBasedLimiterReservation{
+		timeToAct:       time.Unix(0, newResetAt),
+		limiter:         l,
+		incrementInNano: incrementInNano,
+	}
+}
+
 func (l *ResetBasedLimiter) allowN(n int, replenishPerSecond float64, burst int, shouldCheck bool) bool {
 	now := time.Now().UnixNano()
 	if shouldCheck && (l.resetAt.Load() > now || n > burst) {
@@ -50,6 +72,8 @@ func (l *ResetBasedLimiter) ForceN(n int, replenishPerSecond float64, burst int)
 }
 
 func (l *ResetBasedLimiter) IncrementResetAtBy(inc int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.resetAt.Add(inc)
 }
 
@@ -63,4 +87,27 @@ func (l *ResetBasedLimiter) PopResetAtDelta() int64 {
 
 func (l *ResetBasedLimiter) AddDeltaSinceLastPop(delta int64) {
 	l.deltaSinceLastPop.Add(delta)
+}
+
+func (l *ResetBasedLimiter) GetUsage(replenishPerSecond float64, burst int) int64 {
+	now := time.Now().UnixNano()
+	resetAt := l.resetAt.Load()
+	nanosecondsPerToken := int64(float64(time.Second) / replenishPerSecond)
+	left := (now - resetAt) / nanosecondsPerToken
+	burstInt64 := int64(burst)
+	if left > burstInt64 {
+		return burstInt64
+	}
+	return burstInt64 - left
+}
+
+type resetBasedLimiterReservation struct {
+	timeToAct       time.Time
+	limiter         *ResetBasedLimiter
+	incrementInNano int64
+}
+
+func (r *resetBasedLimiterReservation) Cancel() {
+	r.limiter.IncrementResetAtBy(-r.incrementInNano)
+	r.limiter.AddDeltaSinceLastPop(-r.incrementInNano)
 }

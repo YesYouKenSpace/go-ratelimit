@@ -21,6 +21,8 @@ func NewBucket() *Bucket {
 	}
 }
 
+var _ Limiter = NewBucket()
+
 func (b *Bucket) ForceN(n int, replenishPerSecond float64, burst int) bool {
 	return b.allowN(n, replenishPerSecond, burst, false)
 }
