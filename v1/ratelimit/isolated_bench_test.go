@@ -80,9 +80,6 @@ func BenchmarkIsolated(b *testing.B) {
 		case *RedisDelayedSync:
 			t.StartAutoSyncLoop(ctx)
 		case *RedisDelayedSyncPipelined:
-			if err := t.loadSyncScript(); err != nil {
-				panic(err)
-			}
 			t.StartAutoSyncLoop(ctx)
 		}
 
