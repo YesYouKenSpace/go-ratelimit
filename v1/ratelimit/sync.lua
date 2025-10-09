@@ -52,7 +52,6 @@ if not hasSyncedBefore then
     -- Besides, the clock drift disadvantage is not permanent
     -- After the first sync, the key will only sync the delta of the previously synced value and the next remote value
     if currentValue > resetAt then
-        -- Penalized by drift but okay, adjust local
         local drift = currentValue - resetAt
         return { 'adjust_local', drift, currentValue }
     end
