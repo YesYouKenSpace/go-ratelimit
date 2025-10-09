@@ -21,7 +21,7 @@ local currentValue = nil
 -- Case 1: first sync, key not yet synced anywhere
 if not hasSyncedBefore and resetAt > 0 then
     -- set expiry to 1 hour in case this key is never cleaned by the client
-    local was_set = redis.call('SET', key, resetAt, 'NX', "PX", 3600)
+    local was_set = redis.call('SET', key, resetAt, 'NX', 'EX', 3600)
     if was_set then
         -- Successfully created the key
         return { 'ok', resetAt }

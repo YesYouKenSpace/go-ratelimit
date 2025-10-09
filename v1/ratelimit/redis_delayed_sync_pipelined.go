@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,7 +94,7 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipel
 	}
 	if rl.syncErrorHandler == nil {
 		rl.syncErrorHandler = func(err error) {
-			fmt.Printf("error syncing: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "error syncing: %v\n", err)
 		}
 	}
 
@@ -170,6 +171,7 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 			cmdRes, err := cmdArgs.cmd.Result()
 			if err != nil {
 				if redis.HasErrorPrefix(err, "NOSCRIPT") {
+					r.syncErrorHandler(err)
 					if err = r.loadSyncScript(); err != nil {
 						return false
 					}
@@ -192,17 +194,14 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 
 	// Consider using a different approach to prioritize syncing the keys that are used more frequently
 	pipeliner := r.redisClient.Pipeline()
-	batchSize := 0
 
 	r.lastSyncedResetAt.Range(func(key, lastSynced any) bool {
 		commands = append(commands, r.pipelineSyncCmd(pipeliner, key, lastSynced))
-		batchSize += 1
 
-		if batchSize == r.batchSize {
+		if len(commands) == r.batchSize {
 			defer func() {
 				// redis advises to create a new pipeline for each batch
 				pipeliner = r.redisClient.Pipeline()
-				batchSize = 0
 				commands = commands[:0]
 			}()
 			return executePipeline(pipeliner)
@@ -225,7 +224,7 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 func (r *RedisDelayedSyncPipelined) executeCorruptedRemoteRecovery(key string, limiter *limiter.ResetBasedLimiter, delta int64, lastSynced int64) error {
 	switch r.corruptedRemotePolicy {
 	case RedisDelayedSyncCorruptedRemotePolicyUploadLocal:
-		cmd := r.redisClient.Set(r.ctx, key, lastSynced, 0)
+		cmd := r.redisClient.Set(r.ctx, key, lastSynced, time.Hour)
 		if cmd.Err() != nil {
 			return cmd.Err()
 		}
