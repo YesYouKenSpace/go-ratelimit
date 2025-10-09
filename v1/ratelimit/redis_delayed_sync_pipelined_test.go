@@ -16,13 +16,13 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	ratelimiterAlpha, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncOption{
+	ratelimiterAlpha, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
 		RedisClient:           redisClient,
 		DisableAutoSync:       true,
 		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
 	})
 	require.NoError(t, err)
-	ratelimiterBeta, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncOption{
+	ratelimiterBeta, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
 		RedisClient:           redisClient,
 		DisableAutoSync:       true,
 		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
@@ -332,7 +332,7 @@ func Test_GetResetAt_ShouldReturnNonZeroAfterUse_Pipelined(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379", DB: 9})
 	defer rdb.FlushDB(context.Background())
 
-	limiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncOption{
+	limiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
 		RedisClient:     rdb,
 		DisableAutoSync: true,
 	})
@@ -351,7 +351,7 @@ func Test_GetResetAt_DefaultIsZero_Pipelined(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379", DB: 9})
 	defer rdb.FlushDB(context.Background())
 
-	limiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncOption{
+	limiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
 		RedisClient:     rdb,
 		DisableAutoSync: true,
 	})

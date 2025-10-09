@@ -53,12 +53,12 @@ func BenchmarkIsolated(b *testing.B) {
 			SyncInterval:    time.Second / 10,
 			DisableAutoSync: true,
 		})},
-		{name: "Redis With Delay Pipelined (2 syncs per second)", limiter: MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncOption{
+		{name: "Redis With Delay Pipelined (2 syncs per second)", limiter: MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
 			RedisClient:     redisClient,
 			SyncInterval:    time.Second / 2,
 			DisableAutoSync: true,
 		})},
-		{name: "Redis With Delay Pipelined (10 syncs per second)", limiter: MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncOption{
+		{name: "Redis With Delay Pipelined (10 syncs per second)", limiter: MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
 			RedisClient:     redisClient,
 			SyncInterval:    time.Second / 10,
 			DisableAutoSync: true,

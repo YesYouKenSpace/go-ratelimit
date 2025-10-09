@@ -13,7 +13,7 @@ import (
 	"github.com/yesyoukenspace/go-ratelimit/limiter"
 )
 
-const MaxBatchSize = 300
+const DefaultBatchSize = 300
 
 //go:embed sync.lua
 var syncScript string
@@ -37,11 +37,24 @@ type RedisDelayedSyncPipelined struct {
 	syncErrorHandler      func(error)
 	keyExpiry             time.Duration
 	corruptedRemotePolicy RedisDelayedSyncCorruptedRemotePolicy
+	batchSize             int
 
 	syncScriptSha atomic.Value
 }
 
-func MustNewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncOption) *RedisDelayedSyncPipelined {
+type RedisDelayedSyncPipelinedOption struct {
+	// SyncInterval is the interval to sync the rate limit to the redis
+	// Adjust this value to trade off between the performance and the accuracy of the rate limit
+	SyncInterval          time.Duration
+	RedisClient           *redis.Client
+	SyncErrorHandler      func(error)
+	KeyExpiry             time.Duration
+	DisableAutoSync       bool
+	CorruptedRemotePolicy RedisDelayedSyncCorruptedRemotePolicy
+	batchSize             int
+}
+
+func MustNewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipelinedOption) *RedisDelayedSyncPipelined {
 	rdsp, err := NewRedisDelayedSyncPipelined(ctx, opt)
 	if err != nil {
 		panic(err)
@@ -50,7 +63,7 @@ func MustNewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncO
 	return rdsp
 }
 
-func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncOption) (*RedisDelayedSyncPipelined, error) {
+func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipelinedOption) (*RedisDelayedSyncPipelined, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -59,6 +72,11 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncOptio
 	corruptedRemotePolicy := RedisDelayedSyncCorruptedRemotePolicyUploadLocal
 	if opt.CorruptedRemotePolicy != "" {
 		corruptedRemotePolicy = opt.CorruptedRemotePolicy
+	}
+
+	batchSize := opt.batchSize
+	if batchSize == 0 {
+		batchSize = DefaultBatchSize
 	}
 
 	rl := &RedisDelayedSyncPipelined{
@@ -71,6 +89,7 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncOptio
 		syncErrorHandler:      opt.SyncErrorHandler,
 		keyExpiry:             opt.KeyExpiry,
 		corruptedRemotePolicy: corruptedRemotePolicy,
+		batchSize:             batchSize,
 	}
 	if rl.syncErrorHandler == nil {
 		rl.syncErrorHandler = func(err error) {
@@ -179,7 +198,7 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 		commands = append(commands, r.pipelineSyncCmd(pipeliner, key, lastSynced))
 		batchSize += 1
 
-		if batchSize == MaxBatchSize {
+		if batchSize == r.batchSize {
 			defer func() {
 				// redis advises to create a new pipeline for each batch
 				pipeliner = r.redisClient.Pipeline()
