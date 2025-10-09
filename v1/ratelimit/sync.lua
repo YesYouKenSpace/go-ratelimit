@@ -7,7 +7,7 @@ local lastSynced = tonumber(ARGV[4])
 -- Default expiry = -1 (no expiry)
 local expiry = -1
 
--- If configExpiry > 0, set expiry to (current time - keyExpiry)
+-- If configExpiry > 0, set expiry to (current time - configExpiry)
 if configExpiry > 0 then
     -- Redis TIME returns two values: seconds and microseconds
     local t = redis.call('TIME')
