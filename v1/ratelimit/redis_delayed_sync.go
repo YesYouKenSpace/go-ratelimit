@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"github.com/yesyoukenspace/go-ratelimit/limiter"
 )
 
@@ -78,16 +79,19 @@ func NewRedisDelayedSync(ctx context.Context, opt RedisDelayedSyncOption) *Redis
 		}
 	}
 	if !opt.DisableAutoSync {
-		rl.StartAutoSyncLoop()
+		rl.StartAutoSyncLoop(ctx)
 	}
 	return rl
 }
 
-func (r *RedisDelayedSync) StartAutoSyncLoop() {
+func (r *RedisDelayedSync) StartAutoSyncLoop(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(r.syncInterval)
 		for {
 			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
 			case <-r.ctx.Done():
 				ticker.Stop()
 				return
@@ -127,6 +131,7 @@ func (r *RedisDelayedSync) syncAll() error {
 	if r.keyExpiry > 0 {
 		expiry = time.Now().Add(-r.keyExpiry).UnixNano()
 	}
+
 	// Consider using a different approach to prioritize syncing the keys that are used more frequently
 	r.lastSyncedResetAt.Range(func(key, value any) bool {
 		keyAsString := key.(string)
