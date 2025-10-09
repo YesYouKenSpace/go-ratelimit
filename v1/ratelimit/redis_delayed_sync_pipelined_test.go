@@ -308,8 +308,8 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 
 		// After 2 seconds, the key should be expired
 		time.Sleep(time.Millisecond * 2100)
-		err = ratelimiterAlpha.syncAll()
-		require.NoError(t, err)
+		require.NoError(t, ratelimiterAlpha.syncAll())
+
 		_, exists = ratelimiterAlpha.lastSyncedResetAt.Load(randomString)
 		if exists {
 			t.Fatalf("key should be deleted from lastSyncedResetAt")

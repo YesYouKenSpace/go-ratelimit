@@ -76,7 +76,7 @@ if resetAt < expiry and delta == 0 then
 
         local ttl_sec = math.floor(ttl_ns / 1e9)
         if ttl_sec > 0 then
-            redis.call('EXPIRE', key, ttl_sec, 'NX')
+            redis.call('EXPIRE', key, ttl_sec)
         end
     end
     return { 'expired', currentValue }

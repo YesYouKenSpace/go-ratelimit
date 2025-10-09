@@ -41,6 +41,16 @@ func TestDistributedAllow(t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "Redis with delay in sync and pipelined",
+			constructor: func() Ratelimiter {
+				return MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
+					RedisClient:     newRDB(2),
+					SyncInterval:    time.Second / 100,
+					DisableAutoSync: false,
+				})
+			},
+		},
 	}
 	for _, ratelimiter := range ratelimiters {
 		for _, tt := range tests {
