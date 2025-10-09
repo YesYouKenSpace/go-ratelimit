@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"testing"
 	"time"
 
-	"testing"
-
 	"github.com/redis/go-redis/v9"
+
 	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
 )
 
@@ -44,12 +44,24 @@ func BenchmarkIsolated(b *testing.B) {
 		{name: "SyncMap + Load > Store", limiter: NewSyncMapLoadThenStore(NewDefaultLimiter)},
 		{name: "Redis", limiter: NewGoRedis(redisClient)},
 		{name: "Redis With Delay (2 syncs per second)", limiter: NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-			RedisClient:  redisClient,
-			SyncInterval: time.Second / 2,
+			RedisClient:     redisClient,
+			SyncInterval:    time.Second / 2,
+			DisableAutoSync: true,
 		})},
 		{name: "Redis With Delay (10 syncs per second)", limiter: NewRedisDelayedSync(context.Background(), RedisDelayedSyncOption{
-			RedisClient:  redisClient,
-			SyncInterval: time.Second / 10,
+			RedisClient:     redisClient,
+			SyncInterval:    time.Second / 10,
+			DisableAutoSync: true,
+		})},
+		{name: "Redis With Delay Pipelined (2 syncs per second)", limiter: MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
+			RedisClient:     redisClient,
+			SyncInterval:    time.Second / 2,
+			DisableAutoSync: true,
+		})},
+		{name: "Redis With Delay Pipelined (10 syncs per second)", limiter: MustNewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
+			RedisClient:     redisClient,
+			SyncInterval:    time.Second / 10,
+			DisableAutoSync: true,
 		})},
 	}
 	totalConcurrency := 32768
@@ -62,6 +74,15 @@ func BenchmarkIsolated(b *testing.B) {
 	}
 	fmt.Printf("%s/parameters\ttotalConcurrency: %d, concurrencyPerUser: %d, users: %d, rate: %f, burst: %d\n", b.Name(), totalConcurrency, concurrencyPerUser, totalConcurrency/concurrencyPerUser, rate, burst)
 	for _, limiter := range ratelimiters {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		switch t := limiter.limiter.(type) {
+		case *RedisDelayedSync:
+			t.StartAutoSyncLoop(ctx)
+		case *RedisDelayedSyncPipelined:
+			t.StartAutoSyncLoop(ctx)
+		}
+
 		benchmarkIsolated(b, benchmarkIsolatedConfig{
 			name:               limiter.name,
 			totalConcurrency:   totalConcurrency,
@@ -70,6 +91,7 @@ func BenchmarkIsolated(b *testing.B) {
 			rate:               rate,
 			limiter:            limiter.limiter,
 		})
+		cancel()
 	}
 }
 
