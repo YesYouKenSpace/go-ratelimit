@@ -214,7 +214,7 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 		return r.syncAll()
 	}
 
-	if err == nil && batchSize > 0 {
+	if err == nil && len(commands) > 0 {
 		_ = executePipeline(pipeliner)
 	}
 
