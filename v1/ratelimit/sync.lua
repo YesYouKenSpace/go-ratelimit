@@ -1,8 +1,11 @@
 local key = KEYS[1]
 local configExpiry = tonumber(ARGV[1])
-local resetAt = tonumber(ARGV[2])
-local delta = tonumber(ARGV[3])
+local resetAtStr = ARGV[2]
+local deltaStr = ARGV[3]
 local lastSynced = tonumber(ARGV[4])
+
+local delta = tonumber(deltaStr)
+local resetAt = tonumber(resetAtStr)
 
 -- Default expiry = -1 (no expiry)
 local expiry = -1
@@ -21,7 +24,7 @@ local currentValue = nil
 -- Case 1: first sync, key not yet synced anywhere
 if not hasSyncedBefore and resetAt > 0 then
     -- set expiry to 1 hour in case this key is never cleaned by the client
-    local was_set = redis.call('SET', key, resetAt, 'NX', 'EX', 3600)
+    local was_set = redis.call('SET', key, resetAtStr, 'NX', 'EX', 3600)
     if was_set then
         -- Successfully created the key
         return { 'ok', resetAt }
@@ -31,7 +34,7 @@ end
 
 -- Case 2: push delta or get value
 if delta > 0 then
-    currentValue = redis.call('INCRBY', key, delta)
+    currentValue = redis.call('INCRBY', key, deltaStr)
 else
     currentValue = redis.call('GET', key)
     if not currentValue then
