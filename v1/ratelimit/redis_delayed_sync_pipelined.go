@@ -193,12 +193,12 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 				r.observeBatchDuration(time.Since(start).Seconds())
 			}(time.Now())
 		}
+		if r.observeSyncedCount != nil {
+			defer r.observeSyncedCount(float64(pipeline.Len()))
+		}
 		_, err = pipeline.Exec(r.ctx)
 		if err != nil {
 			return false
-		}
-		if r.observeSyncedCount != nil {
-			r.observeSyncedCount(float64(pipeline.Len()))
 		}
 
 		for _, cmdArgs := range commands {
