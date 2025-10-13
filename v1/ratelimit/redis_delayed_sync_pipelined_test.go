@@ -97,7 +97,8 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		errLim, err := NewRedisDelayedSyncPipelined(ctx, errObsOption)
 		require.NoError(t, err)
-		errLim.ForceN("key", 1000, 1, 1)
+		// Add some data to ensure syncAll has something to sync.
+		_,_ = errLim.ForceN("key", 1000, 1, 1)
 		// Close underlying redis client so subsequent sync attempts fail.
 		errLim.redisClient.Close()
 
