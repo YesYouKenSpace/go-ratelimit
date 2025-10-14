@@ -125,8 +125,8 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 
 	t.Run("GetResetAt should return 0 when the key is not used yet", func(t *testing.T) {
 		randomString := test_utils.RandString(10)
-		if ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt() != 0 {
-			t.Fatalf("reset at should be 0, but got %d", ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt())
+		if ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt() != 0 {
+			t.Fatalf("reset at should be 0, but got %d", ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt())
 		}
 	})
 
@@ -135,19 +135,19 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 			randomString := test_utils.RandString(10)
 			_, _ = ratelimiterAlpha.ForceN(randomString, 1, 1, 1)
 			_ = ratelimiterAlpha.syncAll()
-			originalResetAtOfAlpha := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+			originalResetAtOfAlpha := ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt()
 
 			// this ensures beta has the key and syncAll will sync it
-			ratelimiterBeta.lastSyncedResetAt.Store(randomString, 0)
+			ratelimiterBeta.lastSyncedResetAt.Store(prefixKey(randomString), 0)
 			_ = ratelimiterBeta.syncAll()
 			_, _ = ratelimiterBeta.ForceN(randomString, 1, 1, 1)
-			originalResetAtOfBeta := ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt()
+			originalResetAtOfBeta := ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt()
 
 			_, _ = ratelimiterAlpha.ForceN(randomString, 1, 1, 1)
 			_, _ = ratelimiterBeta.ForceN(randomString, 1, 1, 1)
 
-			diffA := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfAlpha
-			diffB := ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfBeta
+			diffA := ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt() - originalResetAtOfAlpha
+			diffB := ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt() - originalResetAtOfBeta
 			if diffA != 1*time.Second.Nanoseconds() {
 				t.Logf("originalResetAtOfAlpha: %d", originalResetAtOfAlpha)
 				t.Errorf("diff should be 1 second, but got %d nanoseconds", diffA)
@@ -163,8 +163,8 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 			_ = ratelimiterAlpha.syncAll()
 			_ = ratelimiterBeta.syncAll()
 
-			diffA = ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfAlpha
-			diffB = ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfBeta
+			diffA = ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt() - originalResetAtOfAlpha
+			diffB = ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt() - originalResetAtOfBeta
 			if diffA != 3*time.Second.Nanoseconds() {
 				t.Logf("originalResetAtOfAlpha: %d", originalResetAtOfAlpha)
 				t.Errorf("diff should be 3 second, but got %d nanoseconds", diffA)
@@ -229,11 +229,11 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 			if err := ratelimiterBeta.syncAll(); err != nil {
 				t.Fatalf("failed to addSyncCommand: %v", err)
 			}
-			resetAtBefore := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+			resetAtBefore := ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt()
 			if err := ratelimiterAlpha.syncAll(); err != nil {
 				t.Fatalf("failed to addSyncCommand: %v", err)
 			}
-			resetAtAfter := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+			resetAtAfter := ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt()
 			if resetAtAfter-resetAtBefore <= 1 {
 				t.Fatalf("should not have adjusted for more than 1s, actual=%d", resetAtAfter-resetAtBefore)
 			}
@@ -245,7 +245,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 			randomString := test_utils.RandString(10)
 			_, _ = ratelimiterAlpha.ForceN(randomString, 2, 1, 1000)
 			// needed for ratelimiterBeta.syncAll to sync the value
-			ratelimiterBeta.lastSyncedResetAt.Store(randomString, 0)
+			ratelimiterBeta.lastSyncedResetAt.Store(prefixKey(randomString), 0)
 			_ = ratelimiterAlpha.syncAll()
 			_ = ratelimiterBeta.syncAll()
 
@@ -316,10 +316,10 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 
 			corruptions := map[string]func(){
 				"replaced by a lower value": func() {
-					redisClient.Set(context.Background(), randomString, time.Now().Add(-1*time.Hour).Unix(), 0)
+					redisClient.Set(context.Background(), prefixKey(randomString), time.Now().Add(-1*time.Hour).Unix(), 0)
 				},
 				"deleted": func() {
-					redisClient.Del(context.Background(), randomString)
+					redisClient.Del(context.Background(), prefixKey(randomString))
 				},
 			}
 
@@ -328,8 +328,8 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 					corrupt = corruption
 					for _, testCase := range testCases {
 						t.Run(testCase.name, func(t *testing.T) {
-							originalResetAtOfBeta := ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt()
-							originalResetAtOfAlpha := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt()
+							originalResetAtOfBeta := ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt()
+							originalResetAtOfAlpha := ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt()
 
 							testCase.scenario()
 							// full cycle of addSyncCommand for both servers with no actions in between
@@ -338,8 +338,8 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 							_ = ratelimiterAlpha.syncAll()
 							_ = ratelimiterBeta.syncAll()
 
-							diffA := ratelimiterAlpha.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfAlpha
-							diffB := ratelimiterBeta.inner.GetLimiter(randomString).GetResetAt() - originalResetAtOfBeta
+							diffA := ratelimiterAlpha.inner.GetLimiter(prefixKey(randomString)).GetResetAt() - originalResetAtOfAlpha
+							diffB := ratelimiterBeta.inner.GetLimiter(prefixKey(randomString)).GetResetAt() - originalResetAtOfBeta
 							if diffA != diffB {
 								t.Fatalf("diff should be equal, but got %d and %d", diffA, diffB)
 							}
@@ -359,16 +359,16 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 
 		randomString := test_utils.RandString(10)
 		_, _ = ratelimiterAlpha.ForceN(randomString, 2, 1, 1000)
-		ratelimiterBeta.lastSyncedResetAt.Store(randomString, 0)
+		ratelimiterBeta.lastSyncedResetAt.Store(prefixKey(randomString), 0)
 		_ = ratelimiterAlpha.syncAll()
 		_ = ratelimiterBeta.syncAll()
 		// Corrupt the remote value
-		redisClient.Del(context.Background(), randomString)
+		redisClient.Del(context.Background(), prefixKey(randomString))
 		_ = ratelimiterAlpha.syncAll()
 		_ = ratelimiterBeta.syncAll()
 
-		lastSyncedResetAtOfAlpha, _ := ratelimiterAlpha.lastSyncedResetAt.Load(randomString)
-		lastSyncedResetAtOfBeta, _ := ratelimiterBeta.lastSyncedResetAt.Load(randomString)
+		lastSyncedResetAtOfAlpha, _ := ratelimiterAlpha.lastSyncedResetAt.Load(prefixKey(randomString))
+		lastSyncedResetAtOfBeta, _ := ratelimiterBeta.lastSyncedResetAt.Load(prefixKey(randomString))
 		if lastSyncedResetAtOfAlpha != 0 {
 			t.Fatalf("last synced reset at should be 0, but got %d", lastSyncedResetAtOfAlpha)
 		}
@@ -387,7 +387,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		require.NoError(t, err)
 		err = ratelimiterAlpha.syncAll()
 		require.NoError(t, err)
-		lastSyncedResetAt, _ := ratelimiterAlpha.lastSyncedResetAt.Load(randomString)
+		lastSyncedResetAt, _ := ratelimiterAlpha.lastSyncedResetAt.Load(prefixKey(randomString))
 		if lastSyncedResetAt == 0 {
 			t.Fatalf("last synced reset at should be set")
 		}
@@ -395,7 +395,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		// because the key has a resetAt that is greater than the key supposed expiry
 		time.Sleep(time.Second * 1)
 		_ = ratelimiterAlpha.syncAll()
-		_, exists := ratelimiterAlpha.lastSyncedResetAt.Load(randomString)
+		_, exists := ratelimiterAlpha.lastSyncedResetAt.Load(prefixKey(randomString))
 		if !exists {
 			t.Fatalf("last synced reset at should be set")
 		}
@@ -404,7 +404,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		time.Sleep(time.Millisecond * 2100)
 		require.NoError(t, ratelimiterAlpha.syncAll())
 
-		_, exists = ratelimiterAlpha.lastSyncedResetAt.Load(randomString)
+		_, exists = ratelimiterAlpha.lastSyncedResetAt.Load(prefixKey(randomString))
 		if exists {
 			t.Fatalf("key should be deleted from lastSyncedResetAt")
 		}
