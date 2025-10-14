@@ -40,6 +40,11 @@ type RedisDelayedSyncPipelined struct {
 	corruptedRemotePolicy RedisDelayedSyncCorruptedRemotePolicy
 	batchSize             int
 
+	observeSyncDuration  limiter.MetricUpdateFunc
+	observeBatchDuration limiter.MetricUpdateFunc
+	observeSyncedCount   limiter.MetricUpdateFunc
+	observeSyncError     limiter.MetricUpdateFunc
+
 	syncScriptSha atomic.Value
 }
 
@@ -53,6 +58,14 @@ type RedisDelayedSyncPipelinedOption struct {
 	DisableAutoSync       bool
 	CorruptedRemotePolicy RedisDelayedSyncCorruptedRemotePolicy
 	batchSize             int
+	// ObserveSyncDuration is called with the duration taken to complete a syncAll operation
+	ObserveSyncDuration limiter.MetricUpdateFunc
+	// ObserveBatchDuration is called with the duration taken to complete a batch of commands in a syncAll operation
+	ObserveBatchDuration limiter.MetricUpdateFunc
+	// ObserveSyncedCount is called with the number of keys synced in a batch
+	ObserveSyncedCount limiter.MetricUpdateFunc
+	// ObserveSyncError is called with 1 for each sync error encountered
+	ObserveSyncError limiter.MetricUpdateFunc
 }
 
 func MustNewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipelinedOption) *RedisDelayedSyncPipelined {
@@ -91,6 +104,11 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipel
 		keyExpiry:             opt.KeyExpiry,
 		corruptedRemotePolicy: corruptedRemotePolicy,
 		batchSize:             batchSize,
+
+		observeSyncDuration:  opt.ObserveSyncDuration,
+		observeBatchDuration: opt.ObserveBatchDuration,
+		observeSyncedCount:   opt.ObserveSyncedCount,
+		observeSyncError:     opt.ObserveSyncError,
 	}
 	if rl.syncErrorHandler == nil {
 		rl.syncErrorHandler = func(err error) {
@@ -125,6 +143,9 @@ func (r *RedisDelayedSyncPipelined) StartAutoSyncLoop(ctx context.Context) {
 				if err := r.syncAll(); err != nil {
 					if r.syncErrorHandler != nil {
 						r.syncErrorHandler(err)
+						if r.observeSyncError != nil {
+							r.observeSyncError(1)
+						}
 					}
 				}
 			}
@@ -156,12 +177,25 @@ type syncArgs struct {
 // Note: This function is not thread safe
 // Avoid overlapping calls to this function
 func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
+	if r.observeSyncDuration != nil {
+		defer func(start time.Time) {
+			r.observeSyncDuration(time.Since(start).Seconds())
+		}(time.Now())
+	}
 	var (
 		commands  []syncArgs
 		mustRetry bool // in case of missing script in Redis server
 	)
 
 	executePipeline := func(pipeline redis.Pipeliner) bool {
+		if r.observeBatchDuration != nil {
+			defer func(start time.Time) {
+				r.observeBatchDuration(time.Since(start).Seconds())
+			}(time.Now())
+		}
+		if r.observeSyncedCount != nil {
+			defer r.observeSyncedCount(float64(pipeline.Len()))
+		}
 		_, err = pipeline.Exec(r.ctx)
 		if err != nil {
 			return false
