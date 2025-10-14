@@ -154,6 +154,7 @@ func (r *RedisDelayedSyncPipelined) StartAutoSyncLoop(ctx context.Context) {
 }
 
 func (r *RedisDelayedSyncPipelined) AllowN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
+	key = prefixKey(key)
 	// Optimizations attempted here:
 	// 1. Load Then LoadOrStore takes longer than just simply LoadOrStore, it may be due to us not using the returned value and there are compiler optimizations
 	// 2. Using go routine with LoadOrStore ends up causing more allocations per operation and slowing down this operation
@@ -162,6 +163,7 @@ func (r *RedisDelayedSyncPipelined) AllowN(key string, cost int, replenishPerSec
 }
 
 func (r *RedisDelayedSyncPipelined) ForceN(key string, cost int, replenishPerSecond float64, burst int) (bool, error) {
+	key = prefixKey(key)
 	// See AllowN for the optimizations attempted here
 	_, _ = r.lastSyncedResetAt.LoadOrStore(key, 0)
 	return r.inner.ForceN(key, cost, replenishPerSecond, burst)
@@ -278,7 +280,7 @@ func (r *RedisDelayedSyncPipelined) executeCorruptedRemoteRecovery(key string, l
 // GetResetAt is a helper that returns the current resetAt value for a given key.
 // Useful for asserting limiter state in tests.
 func (r *RedisDelayedSyncPipelined) GetResetAt(key string) int64 {
-	return r.inner.GetLimiter(key).GetResetAt()
+	return r.inner.GetLimiter(prefixKey(key)).GetResetAt()
 }
 
 func (r *RedisDelayedSyncPipelined) loadSyncScript() error {
@@ -336,4 +338,9 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 	}
 
 	return nil
+}
+
+// to ensure we don't clash with other user keys when writing to Redis
+func prefixKey(key string) string {
+	return fmt.Sprintf("yyks:gort::%s", key)
 }
