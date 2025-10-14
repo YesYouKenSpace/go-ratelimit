@@ -258,7 +258,7 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 func (r *RedisDelayedSyncPipelined) executeCorruptedRemoteRecovery(key string, limiter *limiter.ResetBasedLimiter, delta int64, lastSynced int64) error {
 	switch r.corruptedRemotePolicy {
 	case RedisDelayedSyncCorruptedRemotePolicyUploadLocal:
-		cmd := r.redisClient.Set(r.ctx, key, lastSynced, time.Hour)
+		cmd := r.redisClient.Set(r.ctx, prefixKey(key), lastSynced, time.Hour)
 		if cmd.Err() != nil {
 			return cmd.Err()
 		}
@@ -336,4 +336,8 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 	}
 
 	return nil
+}
+
+func prefixKey(key string) string {
+	return fmt.Sprintf("yyks:gort::%s", key)
 }
