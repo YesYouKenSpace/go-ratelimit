@@ -7,7 +7,7 @@
 
 ## Design Goals
 
-1. **High Performance**: The library is designed to handle high-throughput distributed servers with minimal latency impact.
+1. **High Performance**: The library is designed to handle high-throughput distributed servers with minimal latency impact
 2. **Flexibility**: Multiple implementations to choose from based on your specific needs:
    - Isolated rate limiting for single-instance applications
    - Distributed rate limiting for multi-instance deployments
