@@ -316,10 +316,10 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 
 			corruptions := map[string]func(){
 				"replaced by a lower value": func() {
-					redisClient.Set(context.Background(), prefixKey(randomString), time.Now().Add(-1*time.Hour).Unix(), 0)
+					redisClient.Set(context.Background(), ratelimiterAlpha.prefixKey(randomString), time.Now().Add(-1*time.Hour).Unix(), 0)
 				},
 				"deleted": func() {
-					redisClient.Del(context.Background(), prefixKey(randomString))
+					redisClient.Del(context.Background(), ratelimiterAlpha.prefixKey(randomString))
 				},
 			}
 
@@ -363,7 +363,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		_ = ratelimiterAlpha.syncAll()
 		_ = ratelimiterBeta.syncAll()
 		// Corrupt the remote value
-		redisClient.Del(context.Background(), prefixKey(randomString))
+		redisClient.Del(context.Background(), ratelimiterAlpha.prefixKey(randomString))
 		_ = ratelimiterAlpha.syncAll()
 		_ = ratelimiterBeta.syncAll()
 
@@ -411,9 +411,9 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 
 		// redis expire should kick in
 		time.Sleep(time.Second * 1)
-		v, err := redisClient.Get(context.Background(), prefixKey(randomString)).Result()
+		v, err := redisClient.Get(context.Background(), ratelimiterAlpha.prefixKey(randomString)).Result()
 		if !errors.Is(err, redis.Nil) {
-			ttl, err := redisClient.TTL(context.Background(), prefixKey(randomString)).Result()
+			ttl, err := redisClient.TTL(context.Background(), ratelimiterAlpha.prefixKey(randomString)).Result()
 			if err != nil {
 				t.Fatalf("failed to get ttl: %v", err)
 			}
