@@ -60,7 +60,8 @@ type RedisDelayedSyncPipelinedOption struct {
 	KeyExpiry             time.Duration
 	DisableAutoSync       bool
 	CorruptedRemotePolicy RedisDelayedSyncCorruptedRemotePolicy
-	batchSize             int
+	// BatchSize redis pipeline batch size
+	BatchSize int
 	// ObserveSyncDuration is called with the duration taken to complete a syncAll operation
 	ObserveSyncDuration limiter.MetricUpdateFunc
 	// ObserveBatchDuration is called with the duration taken to complete a batch of commands in a syncAll operation
@@ -91,7 +92,7 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipel
 		corruptedRemotePolicy = opt.CorruptedRemotePolicy
 	}
 
-	batchSize := opt.batchSize
+	batchSize := opt.BatchSize
 	if batchSize == 0 {
 		batchSize = DefaultBatchSize
 	}
