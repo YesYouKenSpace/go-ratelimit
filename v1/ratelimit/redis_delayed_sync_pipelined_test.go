@@ -33,7 +33,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 			DisableAutoSync:       true,
 			SyncInterval:          0,
 			CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
-			batchSize:             2, // small to force multiple batches
+			BatchSize:             2, // small to force multiple batches
 			ObserveSyncDuration: func(v float64, _ ...string) {
 				mu.Lock()
 				defer mu.Unlock()
@@ -59,7 +59,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		lim, err := NewRedisDelayedSyncPipelined(context.Background(), obsOption)
 		require.NoError(t, err)
 
-		// Create 5 keys so with batchSize=2 we expect 3 batches (2,2,1)
+		// Create 5 keys so with BatchSize=2 we expect 3 batches (2,2,1)
 		keys := []string{"k1", "k2", "k3", "k4", "k5"}
 		for i, k := range keys {
 			_, err := lim.ForceN(k, i+1, 1, 1000)
@@ -98,7 +98,7 @@ func TestRedisDelayedSyncPipelined(t *testing.T) {
 		errLim, err := NewRedisDelayedSyncPipelined(ctx, errObsOption)
 		require.NoError(t, err)
 		// Add some data to ensure syncAll has something to sync.
-		_,_ = errLim.ForceN("key", 1000, 1, 1)
+		_, _ = errLim.ForceN("key", 1000, 1, 1)
 		// Close underlying redis client so subsequent sync attempts fail.
 		errLim.redisClient.Close()
 
