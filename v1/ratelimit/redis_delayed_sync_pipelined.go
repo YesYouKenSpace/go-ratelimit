@@ -34,6 +34,7 @@ type RedisDelayedSyncPipelined struct {
 	cancel                context.CancelFunc
 	inner                 *SyncMapLoadThenLoadOrStore[*limiter.ResetBasedLimiter]
 	redisClient           *redis.Client
+	redisPrefix           string
 	lastSyncedResetAt     sync.Map
 	syncErrorHandler      func(error)
 	keyExpiry             time.Duration
@@ -51,8 +52,10 @@ type RedisDelayedSyncPipelined struct {
 type RedisDelayedSyncPipelinedOption struct {
 	// SyncInterval is the interval to sync the rate limit to the redis
 	// Adjust this value to trade off between the performance and the accuracy of the rate limit
-	SyncInterval          time.Duration
-	RedisClient           *redis.Client
+	SyncInterval time.Duration
+	RedisClient  *redis.Client
+	// RedisPrefix prefix to add to Redis key. Default is "yyks:gort::".
+	RedisPrefix           string
 	SyncErrorHandler      func(error)
 	KeyExpiry             time.Duration
 	DisableAutoSync       bool
@@ -94,10 +97,16 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipel
 		batchSize = DefaultBatchSize
 	}
 
+	prefix := "yyks:gort::"
+	if len(opt.RedisPrefix) > 0 {
+		prefix = opt.RedisPrefix
+	}
+
 	rl := &RedisDelayedSyncPipelined{
 		ctx:                   ctx,
 		cancel:                cancel,
 		redisClient:           opt.RedisClient,
+		redisPrefix:           prefix,
 		syncInterval:          opt.SyncInterval,
 		inner:                 NewSyncMapLoadThenLoadOrStore(limiter.NewResetbasedLimiter),
 		lastSyncedResetAt:     sync.Map{},
@@ -259,7 +268,7 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 func (r *RedisDelayedSyncPipelined) executeCorruptedRemoteRecovery(key string, limiter *limiter.ResetBasedLimiter, delta int64, lastSynced int64) error {
 	switch r.corruptedRemotePolicy {
 	case RedisDelayedSyncCorruptedRemotePolicyUploadLocal:
-		cmd := r.redisClient.Set(r.ctx, key, lastSynced, time.Hour)
+		cmd := r.redisClient.Set(r.ctx, r.prefixKey(key), lastSynced, time.Hour)
 		if cmd.Err() != nil {
 			return cmd.Err()
 		}
@@ -337,4 +346,8 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 	}
 
 	return nil
+}
+
+func (r *RedisDelayedSyncPipelined) prefixKey(key string) string {
+	return fmt.Sprintf("%s%s", r.redisPrefix, key)
 }
