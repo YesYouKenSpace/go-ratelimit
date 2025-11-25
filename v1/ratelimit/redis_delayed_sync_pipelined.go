@@ -265,10 +265,14 @@ func (r *RedisDelayedSyncPipelined) syncAll() (err error) {
 	return err
 }
 
-func (r *RedisDelayedSyncPipelined) executeCorruptedRemoteRecovery(key string, limiter *limiter.ResetBasedLimiter, delta int64, lastSynced int64) error {
+func (r *RedisDelayedSyncPipelined) executeCorruptedRemoteRecovery(key string, limiter *limiter.ResetBasedLimiter, delta int64) error {
 	switch r.corruptedRemotePolicy {
 	case RedisDelayedSyncCorruptedRemotePolicyUploadLocal:
-		cmd := r.redisClient.Set(r.ctx, r.prefixKey(key), lastSynced, time.Hour)
+		localResetAt, hasLocalResetAt := r.lastSyncedResetAt.Load(key)
+		if !hasLocalResetAt {
+			localResetAt = time.Now().UnixNano()
+		}
+		cmd := r.redisClient.Set(r.ctx, r.prefixKey(key), localResetAt, time.Hour)
 		if cmd.Err() != nil {
 			return cmd.Err()
 		}
@@ -339,8 +343,7 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 		cmdArgs.lmt.IncrementResetAtBy(diff)
 		r.lastSyncedResetAt.Store(key, remote)
 	case CorruptedRemote:
-		lastSynced := vals[1].(int64)
-		return r.executeCorruptedRemoteRecovery(key, cmdArgs.lmt, cmdArgs.delta, lastSynced)
+		return r.executeCorruptedRemoteRecovery(key, cmdArgs.lmt, cmdArgs.delta)
 	case Expired:
 		r.lastSyncedResetAt.Delete(key)
 	}

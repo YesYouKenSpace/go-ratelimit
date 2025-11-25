@@ -460,3 +460,30 @@ func Test_GetResetAt_DefaultIsZero_Pipelined(t *testing.T) {
 		t.Fatalf("expected resetAt to be 0 for unused key, got %d", got)
 	}
 }
+
+func Test_CorruptedPolicyUploadLocal(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379", DB: 9})
+	defer rdb.FlushDB(context.Background())
+
+	limiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
+		RedisClient:           rdb,
+		DisableAutoSync:       true,
+		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
+	})
+	require.NoError(t, err)
+
+	key := "eoo3o202030dke0d"
+	now := time.Now().UnixNano()
+	limiter.lastSyncedResetAt.Store(key, now)
+	require.NoError(t, limiter.syncAll())
+
+	time.Sleep(time.Second)
+	rdb.Set(context.Background(), limiter.prefixKey(key), time.Now().Add(-1*time.Hour).Unix(), 0)
+
+	require.NoError(t, limiter.syncAll())
+
+	resp := rdb.Get(context.Background(), limiter.prefixKey(key))
+	remoteVal, err := resp.Int64()
+	require.NoError(t, err)
+	require.Equal(t, now, remoteVal)
+}
