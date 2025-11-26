@@ -72,6 +72,7 @@ type RedisDelayedSyncPipelinedOption struct {
 	// ObserveSyncError is called with 1 for each sync error encountered
 	ObserveSyncError limiter.MetricUpdateFunc
 	// ObserveCorruptedRemote is called with 1 and the corrupted key whenever the associated value in Redis is corrupted
+	// Beware of the potential high cardinality of the label (aka the key), depending on your usecase
 	ObserveCorruptedRemote limiter.MetricUpdateFunc
 }
 
