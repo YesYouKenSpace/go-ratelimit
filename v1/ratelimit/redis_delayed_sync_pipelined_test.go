@@ -467,15 +467,14 @@ func Test_GetResetAt_DefaultIsZero_Pipelined(t *testing.T) {
 // for future devs rather than a useful and rigorous test.
 func TestNewlyJoinedClientSyncsSameTimeAsFirstRequest(t *testing.T) {
 	/**
-	1. HTTP gateways are rate-limiting user as per normal
-	2. Suddenly, user authenticates in WS gateway
-	3. User makes WS request
-	4. Rate limiter is triggered, and first sets lastSynced to 0 and creates an empty rate limiter (resetAt = 0)
-	5. syncAll() starts and arguments to the Redis script are generated, resetAt = 0 and lastSynced = 0
-	6. sync.lua will return "adjust_local" with drift = remote value - local resetAt = remote value (e.g. this could be now())
-	7. Local rate limiter finishes the job in WS gateway and sets resetAt = now() + cost of the request
-	8. WS gateway processes the result of sync.lua, and adds drift to the local rate limiter's resetAt, which becomes resetAt = now()+cost+drift = now()+cost+now() = 2 * now()
-	9. WS gateway poisons other gateways with 2 * now()
+	1. Some clients are rate-limiting user as per normal
+	2. Suddenly, a user makes a request to a client that has never rate-limited it before
+	3. Rate limiter is triggered, and first sets lastSynced to 0 and creates an empty rate limiter (resetAt = 0)
+	4. syncAll() starts and arguments to the Redis script are generated, resetAt = 0 and lastSynced = 0
+	5. sync.lua will return "adjust_local" with drift = remote value - local resetAt = remote value (e.g. this could be now())
+	6. New-joiner local rate limiter finishes the job and sets resetAt = now() + cost of the request
+	7. New-joiner processes the result of sync.lua, and adds drift to the local rate limiter's resetAt, which becomes resetAt = now()+cost+drift = now()+cost+now() = 2 * now()
+	8. New-joiner poisons other clients with resetAt = 2 * now()
 	*/
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
