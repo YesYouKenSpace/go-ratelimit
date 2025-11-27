@@ -491,11 +491,13 @@ func TestNewlyJoinedClientSyncsSameTimeAsFirstRequest(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	redisClient.Set(t.Context(), ratelimiter.prefixKey(randomString), time.Now().UnixNano(), time.Hour)
+	redisClient.Set(context.Background(), ratelimiter.prefixKey(randomString), time.Now().UnixNano(), time.Hour)
 
-	go ratelimiter.AllowN(randomString, 100, 100000, 100000)
+	go func() {
+		_, _ = ratelimiter.AllowN(randomString, 100, 100000, 100000)
+	}()
 	time.Sleep(100 * time.Millisecond)
-	ratelimiter.syncAll()
+	_ = ratelimiter.syncAll()
 	time.Sleep(3 * time.Second)
 
 	lmt, ok := ratelimiter.inner.limiters.Load(randomString)
