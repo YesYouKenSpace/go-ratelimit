@@ -178,10 +178,11 @@ func (r *RedisDelayedSyncPipelined) ForceN(key string, cost int, replenishPerSec
 }
 
 type syncArgs struct {
-	key   string
-	cmd   *redis.Cmd
-	delta int64
-	lmt   *limiter.ResetBasedLimiter
+	key     string
+	cmd     *redis.Cmd
+	delta   int64
+	resetAt int64
+	lmt     *limiter.ResetBasedLimiter
 }
 
 // Note: This function is not thread safe
@@ -316,10 +317,11 @@ func (r *RedisDelayedSyncPipelined) pipelineSyncCmd(pipeliner redis.Pipeliner, k
 	)
 
 	return syncArgs{
-		key:   keyAsString,
-		cmd:   cmd,
-		delta: delta,
-		lmt:   lmt,
+		key:     keyAsString,
+		cmd:     cmd,
+		delta:   delta,
+		resetAt: resetAt,
+		lmt:     lmt,
 	}
 }
 
@@ -336,7 +338,16 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 	case AdjustLocal:
 		diff := vals[1].(int64)
 		remote := vals[2].(int64)
-		cmdArgs.lmt.IncrementResetAtBy(diff)
+		// diff = remote value - resetAt sent in the command arguments, but resetAt can have changed in the
+		// meantime, and we need to account for that
+		// local diff
+		//    = drift from remote value
+		//    = remote value - local resetAt
+		//    = (diff + sent resetAt) - local ResetAt
+		if localDiff := diff + cmdArgs.resetAt - cmdArgs.lmt.GetResetAt(); localDiff > 0 {
+			cmdArgs.lmt.IncrementResetAtBy(localDiff)
+		}
+
 		r.lastSyncedResetAt.Store(key, remote)
 	case CorruptedRemote:
 		lastSynced := vals[1].(int64)

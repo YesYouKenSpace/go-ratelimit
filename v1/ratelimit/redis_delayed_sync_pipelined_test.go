@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
+	"github.com/yesyoukenspace/go-ratelimit/limiter"
 )
 
 func TestRedisDelayedSyncPipelined(t *testing.T) {
@@ -458,5 +459,54 @@ func Test_GetResetAt_DefaultIsZero_Pipelined(t *testing.T) {
 	key := "test:getreset:unused"
 	if got := limiter.GetResetAt(key); got != 0 {
 		t.Fatalf("expected resetAt to be 0 for unused key, got %d", got)
+	}
+}
+
+// Note: this test will most of the time pass due to the data race it tests against being very hard to replicate
+// without introducing artificial sleeps. A fix has been written along with this test, so this is more of a reference
+// for future devs rather than a useful and rigorous test.
+func TestNewlyJoinedClientSyncsSameTimeAsFirstRequest(t *testing.T) {
+	/**
+	1. HTTP gateways are rate-limiting user as per normal
+	2. Suddenly, user authenticates in WS gateway
+	3. User makes WS request
+	4. Rate limiter is triggered, and first sets lastSynced to 0 and creates an empty rate limiter (resetAt = 0)
+	5. syncAll() starts and arguments to the Redis script are generated, resetAt = 0 and lastSynced = 0
+	6. sync.lua will return "adjust_local" with drift = remote value - local resetAt = remote value (e.g. this could be now())
+	7. Local rate limiter finishes the job in WS gateway and sets resetAt = now() + cost of the request
+	8. WS gateway processes the result of sync.lua, and adds drift to the local rate limiter's resetAt, which becomes resetAt = now()+cost+drift = now()+cost+now() = 2 * now()
+	9. WS gateway poisons other gateways with 2 * now()
+	*/
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	defer redisClient.FlushDB(context.Background())
+
+	randomString := test_utils.RandString(10)
+
+	ratelimiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
+		RedisClient:           redisClient,
+		DisableAutoSync:       true,
+		KeyExpiry:             time.Second,
+		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
+	})
+	require.NoError(t, err)
+
+	redisClient.Set(t.Context(), ratelimiter.prefixKey(randomString), time.Now().UnixNano(), time.Hour)
+
+	go ratelimiter.AllowN(randomString, 100, 100000, 100000)
+	time.Sleep(100 * time.Millisecond)
+	ratelimiter.syncAll()
+	time.Sleep(3 * time.Second)
+
+	lmt, ok := ratelimiter.inner.limiters.Load(randomString)
+	if !ok {
+		t.Fatal("rate limiter should be set")
+	}
+
+	resetAt := lmt.(*limiter.ResetBasedLimiter).GetResetAt()
+	// 30 hours is arbitrary, can be any large value
+	if resetAt > time.Now().Add(30*time.Hour).UnixNano() {
+		t.Fatalf("resetAt is corrupted: %d", resetAt)
 	}
 }
