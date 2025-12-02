@@ -178,11 +178,12 @@ func (r *RedisDelayedSyncPipelined) ForceN(key string, cost int, replenishPerSec
 }
 
 type syncArgs struct {
-	key     string
-	cmd     *redis.Cmd
-	delta   int64
-	resetAt int64
-	lmt     *limiter.ResetBasedLimiter
+	key        string
+	cmd        *redis.Cmd
+	delta      int64
+	resetAt    int64
+	lmt        *limiter.ResetBasedLimiter
+	lastSynced any
 }
 
 // Note: This function is not thread safe
@@ -317,11 +318,12 @@ func (r *RedisDelayedSyncPipelined) pipelineSyncCmd(pipeliner redis.Pipeliner, k
 	)
 
 	return syncArgs{
-		key:     keyAsString,
-		cmd:     cmd,
-		delta:   delta,
-		resetAt: resetAt,
-		lmt:     lmt,
+		key:        keyAsString,
+		cmd:        cmd,
+		delta:      delta,
+		resetAt:    resetAt,
+		lmt:        lmt,
+		lastSynced: lastSynced,
 	}
 }
 
@@ -338,14 +340,21 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 	case AdjustLocal:
 		diff := vals[1].(int64)
 		remote := vals[2].(int64)
-		// diff = remote value - resetAt sent in the command arguments, but resetAt can have changed in the
-		// meantime, and we need to account for that
-		// local diff
-		//    = drift from remote value
-		//    = remote value - local resetAt
-		//    = (diff + sent resetAt) - local ResetAt
-		if localDiff := diff + cmdArgs.resetAt - cmdArgs.lmt.GetResetAt(); localDiff > 0 {
-			cmdArgs.lmt.IncrementResetAtBy(localDiff)
+
+		if ls, ok := cmdArgs.lastSynced.(int64); !ok || ls == 0 {
+			// This is the "drift" case where this server has synced for the first time with Redis
+			// In this case, Redis will ask the local server to adjust its resetAt to be in sync with
+			// the global state and diff will be equal to remoteResetAt - cmdArgs.resetAt
+			// We need to account for the fact that the local resetAt might have changed, and thus
+			// adjust based on the current resetAt.
+			// A better solution is to modify the Lua script to explicitly handle this case, but it would
+			// break compatibility for existing clients and require them to manually delete the script from the Redis
+			// server
+			diff += cmdArgs.resetAt - cmdArgs.lmt.GetResetAt()
+		}
+
+		if diff > 0 {
+			cmdArgs.lmt.IncrementResetAtBy(diff)
 		}
 
 		r.lastSyncedResetAt.Store(key, remote)
