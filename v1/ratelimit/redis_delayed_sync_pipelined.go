@@ -315,6 +315,7 @@ func (r *RedisDelayedSyncPipelined) pipelineSyncCmd(pipeliner redis.Pipeliner, k
 		resetAt,
 		delta,
 		lastSynced,
+		r.redisPrefix,
 	)
 
 	return syncArgs{

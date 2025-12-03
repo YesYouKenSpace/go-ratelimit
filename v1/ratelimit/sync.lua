@@ -1,4 +1,4 @@
-local prefix = "yyks:gort::"
+local prefix = ARGV[4]
 local key = prefix .. KEYS[1]
 local configExpiry = tonumber(ARGV[1])
 local resetAtStr = ARGV[2]
