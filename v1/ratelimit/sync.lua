@@ -1,4 +1,4 @@
-local prefix = ARGV[4]
+local prefix = ARGV[5]
 local key = prefix .. KEYS[1]
 local configExpiry = tonumber(ARGV[1])
 local resetAtStr = ARGV[2]
@@ -56,8 +56,7 @@ if not hasSyncedBefore then
     -- Besides, the clock drift disadvantage is not permanent
     -- After the first sync, the key will only sync the delta of the previously synced value and the next remote value
     if currentValue > resetAt then
-        local drift = currentValue - resetAt
-        return { 'adjust_local', drift, currentValue }
+        return { 'init_local', currentValue }
     end
     return { 'ok', currentValue }
 end

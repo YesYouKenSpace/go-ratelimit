@@ -26,6 +26,7 @@ const (
 	AdjustLocal     status = "adjust_local"
 	CorruptedRemote status = "corrupted_remote"
 	Expired         status = "expired"
+	InitLocal       status = "init_local"
 )
 
 type RedisDelayedSyncPipelined struct {
@@ -341,24 +342,15 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 	case AdjustLocal:
 		diff := vals[1].(int64)
 		remote := vals[2].(int64)
-
-		if ls, ok := cmdArgs.lastSynced.(int64); !ok || ls == 0 {
-			// This is the "drift" case where this server has synced for the first time with Redis
-			// In this case, Redis will ask the local server to adjust its resetAt to be in sync with
-			// the global state and diff will be equal to remoteResetAt - cmdArgs.resetAt
-			// We need to account for the fact that the local resetAt might have changed, and thus
-			// adjust based on the current resetAt.
-			// A better solution is to modify the Lua script to explicitly handle this case, but it would
-			// break compatibility for existing clients and require them to manually delete the script from the Redis
-			// server
-			diff += cmdArgs.resetAt - cmdArgs.lmt.GetResetAt()
-		}
-
-		if diff > 0 {
-			cmdArgs.lmt.IncrementResetAtBy(diff)
-		}
-
+		cmdArgs.lmt.IncrementResetAtBy(diff)
 		r.lastSyncedResetAt.Store(key, remote)
+	case InitLocal:
+		remote := vals[1].(int64)
+		if remote > cmdArgs.lmt.GetResetAt() {
+			cmdArgs.lmt.SetResetAt(remote)
+			cmdArgs.lmt.PopResetAtDelta()
+			r.lastSyncedResetAt.Store(key, remote)
+		}
 	case CorruptedRemote:
 		lastSynced := vals[1].(int64)
 		return r.executeCorruptedRemoteRecovery(key, cmdArgs.lmt, cmdArgs.delta, lastSynced)
