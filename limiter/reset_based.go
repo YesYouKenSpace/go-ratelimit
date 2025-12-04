@@ -53,6 +53,10 @@ func (l *ResetBasedLimiter) IncrementResetAtBy(inc int64) {
 	l.resetAt.Add(inc)
 }
 
+func (l *ResetBasedLimiter) SetResetAt(resetAt int64) {
+	l.resetAt.Store(resetAt)
+}
+
 func (l *ResetBasedLimiter) GetResetAt() int64 {
 	return l.resetAt.Load()
 }

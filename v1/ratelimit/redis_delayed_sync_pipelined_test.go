@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yesyoukenspace/go-ratelimit/internal/test_utils"
+	"github.com/yesyoukenspace/go-ratelimit/limiter"
 )
 
 func TestRedisDelayedSyncPipelined(t *testing.T) {
@@ -458,5 +459,74 @@ func Test_GetResetAt_DefaultIsZero_Pipelined(t *testing.T) {
 	key := "test:getreset:unused"
 	if got := limiter.GetResetAt(key); got != 0 {
 		t.Fatalf("expected resetAt to be 0 for unused key, got %d", got)
+	}
+}
+
+func TestAllowNSyncAllHighConcurrency(t *testing.T) {
+	/**
+	A data race existed in the previous version of the code. This is how it could occur:
+	1. Some clients are rate-limiting user as per normal
+	2. Suddenly, a user makes a request to a client that has never rate-limited it before
+	3. Rate limiter is triggered, and first sets lastSynced to 0 and creates an empty rate limiter (resetAt = 0)
+	4. syncAll() starts and arguments to the Redis script are generated, resetAt = 0 and lastSynced = 0
+	5. sync.lua will return "adjust_local" with drift = remote value - local resetAt = remote value (e.g. this could be now())
+	6. New-joiner local rate limiter finishes the job and sets resetAt = now() + cost of the request
+	7. New-joiner processes the result of sync.lua, and adds drift to the local rate limiter's resetAt, which becomes resetAt = now()+cost+drift = now()+cost+now() = 2 * now()
+	8. New-joiner poisons other clients with resetAt = 2 * now()
+
+	In this test, we set the remote value to now() for a large number of keys, then run AllowN and syncAll concurrently
+	for each key, and ensure the resetAt value of all is not abnormally large after all operations have completed.
+	*/
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	defer redisClient.FlushDB(context.Background())
+
+	keys := make([]string, 1000)
+	for i := range keys {
+		keys[i] = test_utils.RandString(10)
+	}
+
+	ratelimiter, err := NewRedisDelayedSyncPipelined(context.Background(), RedisDelayedSyncPipelinedOption{
+		RedisClient:           redisClient,
+		DisableAutoSync:       true,
+		KeyExpiry:             time.Second,
+		CorruptedRemotePolicy: RedisDelayedSyncCorruptedRemotePolicyUploadLocal,
+	})
+	require.NoError(t, err)
+
+	p := redisClient.Pipeline()
+	for _, key := range keys {
+		p.Set(context.Background(), ratelimiter.prefixKey(key), time.Now().UnixNano(), time.Hour)
+	}
+	_, err = p.Exec(context.Background())
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	for _, key := range keys {
+		wg.Add(2)
+		go func() {
+			_ = ratelimiter.syncAll()
+			wg.Done()
+		}()
+		go func(k string) {
+			_, _ = ratelimiter.AllowN(k, 100, 100000, 100000)
+			wg.Done()
+		}(key)
+	}
+
+	wg.Wait()
+
+	for _, key := range keys {
+		lmt, ok := ratelimiter.inner.limiters.Load(key)
+		if !ok {
+			t.Fatal("rate limiter should be set")
+		}
+
+		resetAt := lmt.(*limiter.ResetBasedLimiter).GetResetAt()
+		// 30 hours is arbitrary, can be any large value
+		if resetAt > time.Now().Add(30*time.Hour).UnixNano() {
+			t.Fatalf("resetAt is corrupted: %d", resetAt)
+		}
 	}
 }
