@@ -1,6 +1,12 @@
 package limiter
 
+import ()
+
 type Limiter interface {
-	AllowN(int, float64, int) bool
-	ForceN(int, float64, int) bool
+	AllowN(tokenToConsume int, replenishPerSecond float64, burst int) bool
+	ForceN(tokenToConsume int, replenishPerSecond float64, burst int) bool
+}
+
+type Reservation interface {
+	Cancel()
 }

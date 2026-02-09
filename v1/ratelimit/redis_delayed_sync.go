@@ -261,3 +261,7 @@ func (r *RedisDelayedSync) SyncKey(key string) error {
 func (r *RedisDelayedSync) GetResetAt(key string) int64 {
 	return r.inner.GetLimiter(key).GetResetAt()
 }
+
+func (r *RedisDelayedSync) GetUsage(key string, replenishPerSecond float64, burst int) int64 {
+	return r.inner.GetLimiter(key).GetUsage(replenishPerSecond, burst)
+}

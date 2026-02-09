@@ -28,12 +28,12 @@ func (d *BuiltinLimiter) ForceN(n int, replenishPerSecond float64, burst int) bo
 
 func (d *BuiltinLimiter) setRate(limit float64, burst int) bool {
 	modified := false
-	if d.Limiter.Burst() != burst {
-		d.Limiter.SetBurst(burst)
+	if d.Burst() != burst {
+		d.SetBurst(burst)
 		modified = true
 	}
-	if d.Limiter.Limit() != rate.Limit(limit) {
-		d.Limiter.SetLimit(rate.Limit(limit))
+	if d.Limit() != rate.Limit(limit) {
+		d.SetLimit(rate.Limit(limit))
 		modified = true
 	}
 	return modified
