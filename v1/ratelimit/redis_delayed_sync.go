@@ -220,7 +220,7 @@ func (r *RedisDelayedSync) sync(key string, expiry int64) error {
 		// Besides, the clock drift disadvantage is not permanent
 		// After the first sync, the key will only sync the delta of the previously synced value and the next remote value
 		if remoteValue > resetAt {
-			limiter.IncrementResetAtBy(remoteValue - resetAt)
+			limiter.IncrementResetAtBy(remoteValue - limiter.GetResetAt())
 		}
 		r.lastSyncedResetAt.Store(key, remoteValue)
 		return nil

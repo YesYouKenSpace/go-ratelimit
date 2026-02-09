@@ -26,6 +26,7 @@ const (
 	AdjustLocal     status = "adjust_local"
 	CorruptedRemote status = "corrupted_remote"
 	Expired         status = "expired"
+	InitLocal       status = "init_local"
 )
 
 type RedisDelayedSyncPipelined struct {
@@ -183,10 +184,12 @@ func (r *RedisDelayedSyncPipelined) ForceN(key string, cost int, replenishPerSec
 }
 
 type syncArgs struct {
-	key   string
-	cmd   *redis.Cmd
-	delta int64
-	lmt   *limiter.ResetBasedLimiter
+	key        string
+	cmd        *redis.Cmd
+	delta      int64
+	resetAt    int64
+	lmt        *limiter.ResetBasedLimiter
+	lastSynced any
 }
 
 // Note: This function is not thread safe
@@ -318,13 +321,16 @@ func (r *RedisDelayedSyncPipelined) pipelineSyncCmd(pipeliner redis.Pipeliner, k
 		resetAt,
 		delta,
 		lastSynced,
+		r.redisPrefix,
 	)
 
 	return syncArgs{
-		key:   keyAsString,
-		cmd:   cmd,
-		delta: delta,
-		lmt:   lmt,
+		key:        keyAsString,
+		cmd:        cmd,
+		delta:      delta,
+		resetAt:    resetAt,
+		lmt:        lmt,
+		lastSynced: lastSynced,
 	}
 }
 
@@ -343,6 +349,13 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 		remote := vals[2].(int64)
 		cmdArgs.lmt.IncrementResetAtBy(diff)
 		r.lastSyncedResetAt.Store(key, remote)
+	case InitLocal:
+		remote := vals[1].(int64)
+		if remote > cmdArgs.lmt.GetResetAt() {
+			cmdArgs.lmt.SetResetAt(remote)
+			cmdArgs.lmt.PopResetAtDelta()
+			r.lastSyncedResetAt.Store(key, remote)
+		}
 	case CorruptedRemote:
 		if r.observeCorruptedRemote != nil {
 			r.observeCorruptedRemote(1, key)
