@@ -42,10 +42,11 @@ type RedisDelayedSyncPipelined struct {
 	corruptedRemotePolicy RedisDelayedSyncCorruptedRemotePolicy
 	batchSize             int
 
-	observeSyncDuration  limiter.MetricUpdateFunc
-	observeBatchDuration limiter.MetricUpdateFunc
-	observeSyncedCount   limiter.MetricUpdateFunc
-	observeSyncError     limiter.MetricUpdateFunc
+	observeSyncDuration    limiter.MetricUpdateFunc
+	observeBatchDuration   limiter.MetricUpdateFunc
+	observeSyncedCount     limiter.MetricUpdateFunc
+	observeSyncError       limiter.MetricUpdateFunc
+	observeCorruptedRemote limiter.MetricUpdateFunc
 
 	syncScriptSha atomic.Value
 }
@@ -71,6 +72,9 @@ type RedisDelayedSyncPipelinedOption struct {
 	ObserveSyncedCount limiter.MetricUpdateFunc
 	// ObserveSyncError is called with 1 for each sync error encountered
 	ObserveSyncError limiter.MetricUpdateFunc
+	// ObserveCorruptedRemote is called with 1 and the corrupted key whenever the associated value in Redis is corrupted
+	// Beware of the potential high cardinality of the label (aka the key), depending on your usecase
+	ObserveCorruptedRemote limiter.MetricUpdateFunc
 }
 
 func MustNewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipelinedOption) *RedisDelayedSyncPipelined {
@@ -116,10 +120,11 @@ func NewRedisDelayedSyncPipelined(ctx context.Context, opt RedisDelayedSyncPipel
 		corruptedRemotePolicy: corruptedRemotePolicy,
 		batchSize:             batchSize,
 
-		observeSyncDuration:  opt.ObserveSyncDuration,
-		observeBatchDuration: opt.ObserveBatchDuration,
-		observeSyncedCount:   opt.ObserveSyncedCount,
-		observeSyncError:     opt.ObserveSyncError,
+		observeSyncDuration:    opt.ObserveSyncDuration,
+		observeBatchDuration:   opt.ObserveBatchDuration,
+		observeSyncedCount:     opt.ObserveSyncedCount,
+		observeSyncError:       opt.ObserveSyncError,
+		observeCorruptedRemote: opt.ObserveCorruptedRemote,
 	}
 	if rl.syncErrorHandler == nil {
 		rl.syncErrorHandler = func(err error) {
@@ -352,6 +357,9 @@ func (r *RedisDelayedSyncPipelined) processSyncRes(cmdArgs syncArgs, cmdRes inte
 			r.lastSyncedResetAt.Store(key, remote)
 		}
 	case CorruptedRemote:
+		if r.observeCorruptedRemote != nil {
+			r.observeCorruptedRemote(1, key)
+		}
 		lastSynced := vals[1].(int64)
 		return r.executeCorruptedRemoteRecovery(key, cmdArgs.lmt, cmdArgs.delta, lastSynced)
 	case Expired:
